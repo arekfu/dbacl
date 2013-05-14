@@ -1,0 +1,15 @@
+# Same as example1.risk but with a small increase in two/three,
+# and an regular expression dependent loss matrix
+categories {
+    one, two, three
+}
+prior {
+    2, 1, 1
+}
+loss_matrix { 
+"^proportion: ([0-9.]+)" one [ 0, (1+$1)^complexity, (1.2)^complexity ]
+"" 		one   [ 0,               (1.1)^complexity,  (1.1)^complexity ]
+"" 		two   [(1.1)^complexity, 0,                 (2.0)^complexity ] 
+"" 		three [(1.5)^complexity, (1.01)^complexity, 0 ]
+} 
+

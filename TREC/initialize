@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# This script searches the current directory for a self extracting
+# dbacl/TREC archive and runs it. It is only a stub for the self extracting archive.
+# This script accepts several command line arguments to change its behaviour.
+# If no options are given, sensible defaults are used.
+#
+# initialize [OPTIONS.xxx] [VERSION.yyy]
+#
+# VERSION.yyy         this option forces the extraction of dbacl-xxx.TREC.sfx.sh
+# OPTIONS.xxx         this option passes the xxx option to the self extracting script
+
+OPT=""
+SFX=`ls dbacl-*.TREC.sfx.sh | sort | head -1`
+
+for i in $@ ; do
+    case $i in
+	OPTIONS.*)
+	    OPT=`echo $i | sed s/^OPTIONS.//`
+	    echo "Passing option $OPT"
+	;;
+
+	VERSION.*)
+	    V=`echo $i | sed s/^VERSION.//`
+	    SFX="dbacl-$V.TREC.sfx.sh"
+	;;
+    esac
+done
+
+if [ -f $SFX ]; then
+    sh "$SFX" "$OPT"
+else
+    echo "The file $SFX does not exist :-("
+    exit 1
+fi
+
+# return success if dbacl was properly installed 
+# (ie compiled version is identical to installed version)
+EXE=`ls dbacl-*/src/dbacl | head -1`
+cmp $EXE "bin/dbacl"

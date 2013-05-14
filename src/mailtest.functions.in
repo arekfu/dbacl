@@ -1,0 +1,331 @@
+#!/bin/bash
+# 
+# Copyright (C) 2002 Laird Breyer
+#  
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
+# 
+# Author:   Laird Breyer <laird@lbreyer.com>
+#
+# These functions are included by the test scripts. They could be
+# just sourced, but then where to put the common functions in the filesystem? 
+
+# begin mailtest.functions
+
+prerequisite_command() {
+    if [ -z "`type -p $1`" ]; then
+	echo "Error: $1 not found. Please install $2 to proceed."
+	exit 1
+    fi
+}
+
+clean_working_tree() {
+    if [ -e $MXDIR ]; then
+	rm -rf $MXDIR
+    else
+	echo "Nothing to clean"
+    fi
+}
+
+make_dummy_mbox() {
+    cat > $MXDIR/mbox/dummy.mailbox <<EOF
+From MAILER-DAEMON Thu Dec  4 13:50:55 2003
+Date: 04 Dec 2003 13:50:55 +1000
+From: Mail System Internal Data <MAILER-DAEMON@scooby>
+Subject: DON\'T DELETE THIS MESSAGE -- FOLDER INTERNAL DATA
+Message-ID: <1070509855@scooby>
+X-IMAP: 1023007291 0000010227
+Status: RO
+
+This text is part of the internal format of your mail folder, and is not
+a real message.  It is created automatically by the mail system software.
+If deleted, important folder data will be lost, and it will be re-created
+with the data reset to initial values.
+
+EOF
+}
+
+prepare_working_tree() {
+    if [ -d $MXDIR ]; then 
+	echo "Error: Directory $MXDIR already exists. Remove it or use it.";
+	usage;
+    elif [ -n "$1" ]; then
+	prerequisite_command "seq" "shellutils"
+	NUM=`expr $1 - 1`;
+	if [ $NUM -gt -1 ]; then
+	    mkdir "$MXDIR" && \
+	    mkdir "$MXDIR/tmp" && \
+	    mkdir "$MXDIR/log" && \
+	    mkdir "$MXDIR/plots" && \
+	    mkdir "$MXDIR/mbox" && \
+	    mkdir "$MXDIR/review" && \
+	    mkdir "$MXDIR/filters" && \
+	    for i in `seq 0 $NUM`; do mkdir "$MXDIR/$i"; done && \
+	    echo "=== prepare_working_tree $*" >> $ALOG
+
+	else
+	    echo "Error: Please specify a number greater than zero."
+	    usage
+	fi
+
+    else
+	echo "Error: Please specify a number."
+	usage
+    fi
+}
+
+get_categories() {
+    CATS=`find $MXDIR -type f -name '*.mbox' -exec basename {} \; | sort -u`
+    [ -z "$CATS" ] && echo "No categories found"
+}
+
+get_filters() {
+    FILTS=`find $FILTERS -type f -perm +0111 -exec basename {} \; | sort -u`
+    [ -z "$FILTS" ] && echo "No filters found"
+}
+
+get_number_of_subsets() {
+    NUM=`ls $MXDIR | grep '^[0-9]' | wc -l`
+    if [ $(($NUM)) -le 0 ]; then
+	echo "error: you need to prepare first."
+	usage
+    fi
+}
+
+review_misclassified() {
+    SM=$1
+    shift
+    cat > "$SM" <<EOF
+#!/bin/sh
+cat > msg.tmp.\$POSITION.\$FILENO
+M=\`head -1 msg.tmp.\$POSITION.\$FILENO | grep -e "\$EMAIL.*\$DATE"\`
+if [ -n "\$M" ]; then
+    mv msg.tmp.\$POSITION.\$FILENO $MXDIR/review/\$1.\$2.\$POSITION.\$FILENO
+else
+    rm msg.tmp.\$POSITION.\$FILENO
+fi
+EOF
+    
+    if [ -d "$MXDIR/review" ]; then
+	rm -f "$MXDIR/review/*"
+    else
+	echo "Error: You need to prepare first."
+	usage
+    fi
+
+    if [ -s "$CLOG" ]; then
+	grep " $1 $2 " "$CLOG" | \
+	    while read f; do
+		BOX=`echo $f | cut -d' ' -f2`
+		export POSITION=`echo $f | cut -d' ' -f1`
+		export EMAIL=`echo $f | cut -d' ' -f4`
+		export DATE=`echo $f | cut -d' ' -f5-`
+		echo "$f"
+		[ -e "$MXDIR/$POSITION/$BOX.mbox" ] || export POSITION=mbox
+		cat "$MXDIR/$POSITION/$BOX.mbox" | formail -s /bin/sh "$SM" "$1" "$2"
+	    done
+    else
+	echo "Error: There are no logs - run the classifier(s) first" 
+    fi
+
+    rm -f "$SM"
+}
+
+testsuite_list_wrappers() {
+    if [ -d $BOOTSTRAP ] ; then
+	echo -ne "The following classification wrappers are selectable:\n\n"
+	for f in `ls $BOOTSTRAP` ; do
+	    [ -x "$BOOTSTRAP/$f" ] && echo "$f - `$BOOTSTRAP/$f describe`"
+	done
+    else
+	echo "Bootstrap directory $BOOTSTRAP does not exist."
+    fi
+}
+
+testsuite_deselect_wrappers() {
+    shift
+    if [ -z "$*" ] ; then
+	usage
+    else
+	for f in "$@" ; do 
+	    if [ -e $FILTERS/$f ] ; then
+		echo "deselecting $f"
+		rm -f $FILTERS/$f
+	    else
+		echo "$f: no such filter."
+	    fi
+	done
+    fi
+}
+
+testsuite_select_wrappers() {
+    shift
+    if [ -z "$*" ] ; then
+	usage
+    else
+	for f in $* ; do
+	    if [ -x $BOOTSTRAP/$f ] ; then
+		$BOOTSTRAP/$f bootstrap $FILTERS
+	    else
+		echo "The wrapper $f cannot be selected, skipping."
+	    fi
+    done
+    fi
+}
+
+summarize_log() {
+    awk -v "num=$NUM" -v "cats=${CATS//.mbox/}" '
+BEGIN{
+
+    split(cats,names)
+
+}
+/^[^#]/{
+
+    f[$2,$3]++
+    fn[$3]++
+    fp[$2]++
+
+}
+END{
+
+    printf("Where do misclassifications go?\n(numbers on diagonal represent \"recall\")\n\n")
+
+    printf("  true     | but predicted as...\n")
+    printf("    *      | ")
+    for(c in names) printf("%10s", names[c])
+    printf("\n")
+
+    for(c in names) {
+	printf("%-10s | ", names[c])
+	for(d in names) {
+	    printf("%9.2f%%", 100 * f[names[c],names[d]]/fp[names[c]])
+	}
+	printf("\n")
+    }
+
+    printf("\n")
+
+    printf("What is really in each category after prediction?\n(numbers on diagonal represent \"precision\")\n\n")
+
+    printf("category   | contains mixture of...\n")
+    printf("    *      | ")
+    for(c in names) printf("%10s", names[c])
+    printf("\n")
+
+    for(c in names) {
+	printf("%-10s | ", names[c])
+	for(d in names) {
+	    printf("%9.2f%%", 100 * f[names[d],names[c]]/fn[names[c]])
+	}
+	printf("\n")
+    }
+
+    printf("\n")
+
+    x = y = 0
+    for(c in names) {
+	x += f[names[c],names[c]]
+	for(d in names) {
+	    y += f[names[c],names[d]]
+	}
+    }
+
+    printf("Total correct classifications: %9.2f%%\n\n", (100 * x)/y)
+
+}
+'
+}
+
+plot_errors() {
+    OUTFILE=$MXDIR/plots/`basename $1 .log`
+    CMDFILE=$OUTFILE.cmd
+    DATAFILE=$OUTFILE.plotdata
+    TITLE=$2
+    cat $1 \
+	| grep -v '^#' \
+	| cut -f1,2,3 -d ' ' \
+	| awk '{count[$1]++; ecount[$1] += ($2 != $3); print (count[$1] == 1) ? "\n" : "", count[$1], ecount[$1]}' \
+	> $DATAFILE
+    shift 2
+    OUTPUT="set terminal x11"
+    SCALE="unset logscale"
+    PAUSE="pause -1 \"Press any key...\""
+    OUTPRINT=""
+    for o in "$@"; do
+	if [ "$o" = "ps" ]; then
+	    OUTPUT="set terminal postscript"
+	    OUTPRINT="set output \"$OUTFILE.ps\""
+	    PAUSE=""
+	    echo "writing $OUTFILE.ps"
+	elif [ "$o" = "logscale" ]; then
+	    SCALE="set logscale"
+	fi
+    done
+    cat > $CMDFILE <<EOF
+$OUTPUT
+$OUTPRINT
+$SCALE
+unset key
+set title "$TITLE"
+plot "$DATAFILE" with points
+$PAUSE
+EOF
+    gnuplot $CMDFILE
+}
+
+plot_biplot() {
+    OUTFILE=$MXDIR/plots/$1
+    CMDFILE=$OUTFILE.cmd
+    DATAFILE=$OUTFILE.plotdata
+    ERRORFILE=$OUTFILE.ploterrors
+    TITLE=$1
+    cat $2 \
+	| grep -v '^#' \
+	| awk '{print $5, $14}' \
+	> $DATAFILE
+    cat $2 \
+	| grep -v '^#' \
+	| awk '{if( (($2 == $3) && ($5 > $14)) || (($2 != $3) && ($5 < $14)) ) print }' \
+	| awk '{print $5, $14}' \
+	> $ERRORFILE
+    shift 2
+    OUTPUT="set terminal x11"
+    SCALE="unset logscale"
+    PAUSE="pause -1 \"Press any key...\""
+    OUTPRINT=""
+    for o in "$@"; do
+	if [ "$o" = "ps" ]; then
+	    OUTPUT="set terminal postscript"
+	    OUTPRINT="set output \"$OUTFILE.ps\""
+	    PAUSE=""
+	    echo "writing $OUTFILE.ps"
+	elif [ "$o" = "logscale" ]; then
+	    SCALE="set logscale"
+	fi
+    done
+    cat > $CMDFILE <<EOF
+$OUTPUT
+$OUTPRINT
+$SCALE
+unset key
+set title "$TITLE"
+plot "$DATAFILE" using 1:2 pt 1, "$ERRORFILE" using 1:2 pt 5, x
+
+$PAUSE
+EOF
+    gnuplot $CMDFILE
+}
+
+# end mailtest.functions

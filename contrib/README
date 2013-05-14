@@ -1,0 +1,15 @@
+DBACL/CONTRIB DIRECTORY
+
+This directory contains patches and code submitted by various people.
+Each patch is listed together with its copyright status and whether it
+was incorporated into the dbacl code. Please contact laird@lbreyer.com
+if the summary below is incorrect.
+Many thanks go to all contributors.
+
+clint_adams-patch-dbacl-1.9.gz
+	Changes a few paths in the Makefiles and test scripts to allow
+	more flexible program builds.
+
+	Copyright is disclaimed.
+
+	Has been incorporated in dbacl 1.10.		

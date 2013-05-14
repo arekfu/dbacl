@@ -1,0 +1,74 @@
+\" t
+.TH HYPEX 1 "Bayesian Classification Tools" "Version @VERSION@" ""
+.SH NAME
+hypex \- computes the Chernoff exponent between two simple categories.
+.SH SYNOPSIS
+.HP
+.B hypex
+[-hH size] [-s stepsize]
+CATDUMP1 CATDUMP2
+.HP
+.B hmine
+-V
+.SH DESCRIPTION
+.PP
+.B hypex
+reads two category dumps produced by dbacl(1) after learning.
+A category dump is obtained using the 
+.B -d
+and
+.B -l
+switches, and is a textual representation of the feature weights which
+exist in the binary category files. 
+.PP
+Given two such category dumps for simple unigram categories,
+.B hypex
+calculates the Kullback Leibler divergence between the probability models,
+and prints out exponential error exponents for Neyman-Pearson hypothesis 
+tests under a range of threshold values. See
+.BR "Cover and Thomas (1991) Elements of Information Theory" ,
+Chap. 12.
+.PP
+Note that only simple categories are supported, and the output only
+makes sense under appropriate theoretical conditions. This is a very 
+specialized calculator.
+.SH EXIT STATUS
+.B hypex
+returns 0 on success, 1 if an error occurs.
+.SH OPTIONS
+.IP -h
+.IP -H
+Same as dbacl(1). Selects the hash sizes in powers of two.
+.IP -s
+Stepsize for the threshold.
+.B hypex
+outputs exponents for different values of the threshold, within an 
+interval bounded by the Kullback Leibler divergences between the categories.
+.IP -V
+Print the program version number and exit. 
+.SH SOURCE
+.PP
+The source code for the latest version of this program is available at the
+following locations: 
+.PP
+.na
+http://www.lbreyer.com/gpl.html
+.br
+http://dbacl.sourceforge.net
+.ad
+.SH BUGS
+.PP
+Doesn't work with complex categories, and theoretical assumptions are
+unrealistic in practice. 
+.SH AUTHOR
+.PP
+Laird A. Breyer <laird@lbreyer.com>
+.SH SEE ALSO
+.PP
+.BR dbacl (1), 
+.BR mailcross (1),
+.BR mailfoot (1),
+.BR mailinspect (1),
+.BR mailtoe (1),
+.BR regex (7)
+

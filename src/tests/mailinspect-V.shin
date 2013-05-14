@@ -1,0 +1,6 @@
+#!/bin/sh
+# test mailinspect -V switch
+PATH=/bin:/usr/bin
+MAILINSPECT=$TESTBIN/mailinspect
+
+test x"`$MAILINSPECT -V | head -1`" = x"mailinspect version @VERSION@"

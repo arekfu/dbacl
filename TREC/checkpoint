@@ -1,0 +1,9 @@
+#!/bin/sh
+. ./share/dbacl/TREC/OPTIONS
+
+if [ -n "$1" ]; then
+	cp -fpr ./db "./check-$1"
+	exit 0
+fi
+echo "checkpoint $1 command failed" >> ./stderr.log
+exit 1

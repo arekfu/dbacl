@@ -1,0 +1,119 @@
+#!/bin/bash
+# 
+# Copyright (C) 2002 Laird Breyer
+#  
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+# 
+# Author:   Laird Breyer <laird@lbreyer.com>
+#
+# IMPLEMENTATION NOTES
+#
+# This script follows the mailcross testsuite interface
+# requirements. Type man mailcross for details.
+#
+# The script accepts one of more commands on the command line,
+# and may read STDIN and write STDOUT as follows:
+#
+# If $1 == "filter":
+# In this case, a single email is expected on STDIN,
+# and a list of category filenames is expected in $2, $3, etc.
+# The script writes the category name corresponding to the 
+# input email on STDOUT.
+#
+# If $1 == "learn":
+# In this case, a standard mbox stream is expected on STDIN,
+# while a suitable category file name is expected in $2. No output
+# is written to STDOUT.
+#
+# If $1 == "clean":
+# In this case, a directory is expected in $2, which is examined
+# for old database information. If any old databases are found, they
+# are purged or reset. No output is written to STDOUT.
+#
+# If $1 == "describe":
+# In this case, STDIN and the command line are ignored. A single
+# line is written on STDOUT, describing the filter functionality.
+#
+# If $1 == "bootstrap":
+# In this case, the current script is copied to the directory $2,
+# provided the classifier we're wrapping exists on the system.
+#
+
+IFILE="ifile -h"
+IFILEDB="ifiledb"
+[ -z "$TEMPDIR" ] && TEMPDIR=/tmp
+
+case "$1" in
+    filter)
+	shift
+	CATEGORY=`basename $1`
+	DBPATH=`dirname $1`
+	cat > "$TEMPDIR/mailfilter.tmp" && $IFILE -b "$DBPATH/$IFILEDB" -c -q "$TEMPDIR/mailfilter.tmp" | cut -d' ' -f2 | xargs basename
+	;;
+    learn)
+	shift
+	CATEGORY=`basename $1`
+	DBPATH=`dirname $1`
+	formail -s /bin/sh -c "cat > $TEMPDIR/maillearn.tmp && $IFILE -b ${DBPATH}/ifiledb -i $CATEGORY $TEMPDIR/maillearn.tmp" 
+	;;
+    clean)
+	shift
+	find "$1" -name "$IFILEDB" -exec rm {} \;
+	find "$1" -name "*.tmp" -exec rm {} \;
+	;;
+    describe)
+	VER="(unavailable?)"
+	if [ -n "`which ifile`" ] ; then
+	    VER=`ifile -V | sed 's/ifile //'`
+	fi
+	echo "ifile $VER with to,from,subject headers and default tokens"
+	;;
+    bootstrap)
+	if [ -d "$2" ] ; then
+            if [ -n "`which ifile`" ] ; then
+		echo "selecting $0"
+		cp "$0" "$2"
+	    else
+		echo "ifile appears to be missing"
+            fi
+	else
+	    echo "bad target directory $2"
+	fi
+	;;
+    toe)
+	ME="$0"
+	shift
+	TRUECAT="$1"
+	DBPATH=`dirname $1`
+	shift
+	cat > "$TEMPDIR/mailtoe.tmp"
+	VERDICT=`cat "$TEMPDIR/mailtoe.tmp" | "$ME" filter "$@"`
+	if [ "x$VERDICT" != "x`basename $TRUECAT`" ] ; then
+	    $IFILE -b ${DBPATH}/ifiledb -i $TRUECAT "$TEMPDIR/mailtoe.tmp"
+	fi
+	echo -ne "$VERDICT"
+	;;
+    foot)
+	ME="$0"
+	shift
+	TRUECAT="$1"
+	DBPATH=`dirname $1`
+	shift
+	cat > "$TEMPDIR/mailfoot.tmp"
+	VERDICT=`cat "$TEMPDIR/mailfoot.tmp" | "$ME" filter "$@"`
+	$IFILE -b ${DBPATH}/ifiledb -i $TRUECAT "$TEMPDIR/mailfoot.tmp"
+	echo -ne "$VERDICT"
+	;;
+esac

@@ -1,0 +1,19 @@
+Some files in the src directory are in the public domain or freely
+redistributable. Copyright belongs to their respective authors,
+and is marked in the files.
+
+Public domain hash function (c) by Bob Jenkins:
+
+jenkins.c
+jenkins2.c 
+
+Special functions from the Cephes math library (c) by Stephen L. Moshier:
+
+mconf.h
+mtherr.c
+igam.c
+gamma.c
+const.c
+polevl.c
+isnan.c
+ndtr.c

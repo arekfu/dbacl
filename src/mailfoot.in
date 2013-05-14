@@ -1,0 +1,355 @@
+#!/bin/bash
+# 
+# Copyright (C) 2002 Laird Breyer
+#  
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
+# 
+# Author:   Laird Breyer <laird@lbreyer.com>
+#
+
+PROGNAME="$0"
+PROGNAME2=`basename $0`
+VERSION="$PROGNAME version @VERSION@\nFull Online Ordered Training simulator"
+MXDIR="$PWD/mailfoot.d"
+ALOG="$MXDIR/log/activity.log"
+CLOG="$MXDIR/log/foot.log"
+SLOG="$MXDIR/log/summary.log"
+TEMPDIR="$MXDIR/tmp"
+BOOTSTRAP="@PKGDATADIR@/testsuite"
+FILTERS="$MXDIR/filters"
+
+# use this for debugging
+# set -x
+
+usage() {
+    echo "
+Usage: 
+
+    $PROGNAME2 prepare size
+    $PROGNAME2 add category [MBOX]...
+    $PROGNAME2 run
+    $PROGNAME2 summarize [LEVEL]
+    $PROGNAME2 plot [ps|logscale]
+    $PROGNAME2 review TRUECAT PREDCAT
+    $PROGNAME2 clean
+    $PROGNAME2 killall
+
+    $PROGNAME2 testsuite select [FILTER]...
+    $PROGNAME2 testsuite deselect [FILTER]...
+    $PROGNAME2 testsuite list
+    $PROGNAME2 testsuite status
+    $PROGNAME2 testsuite run [plots]
+    $PROGNAME2 testsuite summarize
+"
+    exit 1
+}
+
+mbox_multiplex() {
+    perl -e '
+# usage: $0 seqno seed [MBOX]... -s COMMAND ARGS 
+use strict; 
+$SIG{PIPE} = "IGNORE"; 
+my %mbox; 
+my %line; 
+my $cmd = ""; 
+my $args = ""; 
+my $n = shift;
+srand shift; 
+ 
+foreach my $g (@ARGV) { 
+  if( "$g" eq "-s" ) { 
+    $cmd = "|"; 
+  } elsif( $cmd ne "" ) { 
+    $cmd .= " $g"; 
+  } else { 
+    if( open($mbox{$g}, "<$g") ) {
+      $args .= " $g"; 
+    } else {
+      delete $mbox{$g}; 
+    }
+  } 
+} 
+
+$args =~ s/\.mbox//g;
+$args =~ s|/mbox/|/$n/|g;
+$| = 1; 
+
+while( scalar keys %mbox > 0 ) { 
+  my $j = int(rand scalar keys %mbox); 
+  foreach my $f (keys %mbox) { 
+    if( $j-- <= 0 ) { 
+      if( eof($mbox{$f}) ) { 
+        close($mbox{$f}); 
+        delete $mbox{$f}; 
+      } else { 
+	my $c = $f;
+	$c =~ s|\.mbox$||;
+	$c =~ s|/mbox/|/$n/|;
+
+        open(CPIPE, "$cmd $c $args"); 
+        while( ($line{$f} !~ /^From /) && !eof($mbox{$f}) ) { 
+          $line{$f} = readline $mbox{$f}; 
+        } 
+
+	my $fromline = $line{$f};
+	$fromline =~ s/^From//;
+	$c =~ s|^.*/||;
+
+	print "$n $c ";
+        print CPIPE $line{$f}; 
+        $line{$f} = readline $mbox{$f}; 
+        while( !eof($mbox{$f}) && ($line{$f} !~ /^From /) ) { 
+          print CPIPE $line{$f}; 
+          $line{$f} = readline $mbox{$f}; 
+        } 
+        close(CPIPE); 
+	# expect the piped command to output result without trailing newline
+	print $fromline;
+      } 
+      last; 
+    } 
+  } 
+} 
+' "$@"
+}
+
+# this is the default filter
+if [ -z "$MAILFOOT_FILTER" ]; then
+    MAILFOOT_FILTER="@PKGDATADIR@/dbaclB foot"
+fi
+
+
+# begin mailtest.functions
+# end mailtest.functions
+
+# check this for environment variable overrrides
+[ -e $HOME/.mailfootrc ] && . $HOME/.mailfootrc
+
+export TEMPDIR
+# main switch statement - this processes commands
+case $1 in
+
+    '-V')
+	echo $VERSION
+	;;
+
+    clean) # delete working tree
+	clean_working_tree
+	;;
+
+    killall)
+	prerequisite_command "killall" "killall"
+	killall -9 -g mailfoot
+	;;
+
+    prepare) # create directory tree
+	shift
+	prepare_working_tree "$@"
+	NUM=`expr $1 - 1`
+	# use parent process id to randomize
+	RANDOM=$PPID
+	for i in `seq 0 $NUM`; do 
+	    echo $RANDOM > "$MXDIR/$i/seed"
+	done
+	;;
+
+    add)
+	shift
+	CATNAME="$1"
+	if [ -z "$CATNAME" ]; then
+	    echo "error: missing category name."
+	    usage
+	fi
+
+	prerequisite_command "formail" "mailutils"
+	get_number_of_subsets
+
+	echo "=== $PROGNAME $*" >> $ALOG
+
+	shift
+	# use formail to ensure mbox format is clean
+	if [ -n "$*" ]; then
+	    cat "$@" | formail -s /bin/bash -c \
+		"cat >> $MXDIR/mbox/$CATNAME.mbox"
+	else
+	    formail -s /bin/bash -c \
+		"cat >> $MXDIR/mbox/$CATNAME.mbox"
+	fi
+	;;
+
+    learn) 
+	echo "This command is not meaningful."
+	;;
+
+    run) 
+	shift
+	get_number_of_subsets
+	NUM=$(($NUM - 1)) # we count from zero to NUM-1
+	get_categories
+	STUFF="$MXDIR/log/run.stuff"
+
+	prerequisite_command "perl" "perl"
+	prerequisite_command "sed" "sed"
+	prerequisite_command "seq" "shellutils"
+
+	echo "=== $PROGNAME run $*" >> $ALOG
+
+	
+	echo "# location | true | predicted | from" > $CLOG
+
+	for i in `seq 0 $NUM`; do
+
+	    COMMAND="$MAILFOOT_FILTER "
+	    SEED=`cat $MXDIR/$i/seed`
+	    CATPATHS=`for n in $CATS; do echo -ne "$MXDIR/mbox/$n "; done`
+	    echo "| $COMMAND" >> $ALOG
+
+	    mbox_multiplex  $i $SEED $CATPATHS -s $COMMAND >> $CLOG
+
+	    echo "    toe $COMMAND |" >> $ALOG
+	done
+	;;
+
+    summarize) 
+	shift
+	get_number_of_subsets # includes check that directory tree is present
+	get_categories
+
+	prerequisite_command "awk" "awk or equivalent"
+
+	echo "=== $PROGNAME summarize $*" >> $ALOG
+
+	if [ -s $CLOG ]; then
+	    cat $CLOG | summarize_log
+	else
+	    echo "Error: No results found. You must run the FOOT simulations first."
+	    usage
+	fi
+	;;
+
+    review) 
+	shift
+	prerequisite_command "formail" "mailutils"
+	prerequisite_command "grep" "grep"
+
+	if [ -z "$1" -o -z "$2" ]; then
+	    echo "Error: Missing category, e.g. $PROGNAME review notspam spam"
+	else
+	    review_misclassified "$MXDIR/tmp/save_msg.sh" "$1" "$2"
+	fi
+	;;
+
+    plot)
+	shift
+	prerequisite_command "gnuplot" "gnuplot"
+	
+	if [ -e "$MXDIR/log/foot.log" ]; then
+	    plot_errors "$MXDIR/log/foot.log" "Misclassifications over time in FOOT simulation\n$MAILFOOT_FILTER" "$@"
+	fi
+	;;
+
+    testsuite)
+	shift
+	case $1 in
+	    list)
+		testsuite_list_wrappers
+		;;
+
+	    deselect)
+		testsuite_deselect_wrappers "$@"
+		;;
+
+	    select)
+		testsuite_select_wrappers "$@"
+		;;
+
+	    status)
+		echo -e "The following categories are ready to be FOOT tested:\n"
+		get_categories
+		for c in $CATS; do
+		    echo -n "$c - counting... "
+		    NUM=`grep '^From ' $MXDIR/*/$c | wc -l`
+		    echo "$NUM messages"
+		done
+
+		echo -e "\nThe following classifiers are ready to be FOOT tested:\n"
+		get_filters
+		for f in $FILTS; do
+		    echo "$f - `$FILTERS/$f describe`"
+		done
+		;;
+
+	    run)
+		get_filters
+		get_categories
+		get_number_of_subsets
+		NUM=`expr $NUM - 1`
+		make_dummy_mbox
+		for f in $FILTS; do
+
+		    echo -ne "Now testing: "
+		    "$FILTERS/$f" describe
+
+		    echo "Cleanup."
+		    "$FILTERS/$f" clean "$MXDIR"
+
+		    # before we can classify, we need to create all the 
+		    # category databases - we use a dummy mailbox for this
+		    for i in `seq 0 $NUM`; do
+			for j in $CATS; do
+			    cat $MXDIR/mbox/dummy.mailbox | "$FILTERS/$f" learn "$MXDIR/$i/${j/.mbox/}"
+			done
+		    done
+
+		    export MAILFOOT_FILTER="$FILTERS/$f foot"
+
+		    echo "Running."
+		    time "$PROGNAME" run
+
+		    echo "Writing results."
+		    echo -e "\n---------------" >> "$SLOG"
+		    "$FILTERS/$f" describe >> "$SLOG"
+		    date >> "$CLOG"
+		    echo "---------------" >> "$SLOG"
+		    "$PROGNAME" summarize >> "$SLOG"
+
+		    if [ "$2" = "plots" ]; then
+			prerequisite_command "gnuplot" "gnuplot"
+			plot_errors "$MXDIR/plots/$f.foot.ps" "Misclassifications over time in FOOT simulation\n$f" ps
+		    fi
+
+		done
+		;;
+
+	    summarize) 
+		if [ -s "$SLOG" ]; then
+		    cat "$SLOG"
+		else
+		    echo "Error: No results found. You must run the testsuite first."
+		fi
+		;;
+
+	    *)
+		usage
+		;;
+	esac
+	;;
+
+    *) 
+	usage
+	;;
+esac
+
+exit 0

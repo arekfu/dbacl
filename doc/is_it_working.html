@@ -1,0 +1,170 @@
+<html>
+<title>dbacl: Is It Working?</title>
+<body>
+<h1><center>dbacl: Is It Working?</center></h1>
+<center><p>Laird A. Breyer</p></center>
+<h2>Introduction</h2>
+<p>
+<a href="http://www.lbreyer.com/gpl.html">dbacl</a> is a UNIX/POSIX command line
+toolset which can be used in scripts to classify a single email among one
+or more previously learned categories.
+<p>
+This document is intended to help you check that your installation of
+dbacl is working as it should. When trying out new software, there are
+many things to learn and things that can go wrong, and because  
+<a href="http://www.lbreyer.com/gpl.html">dbacl</a> is a statistical
+tool, it can sometimes be surprising and unpredictable. When you get unexpected
+results, is it because dbacl doesn't work as claimed, an undiscovered bug,
+problems to do with learning, problems in your scripts? Knowing what to 
+look for is half the battle. 
+<p>
+<i>In the text below, some commands are written after a '%'. The '%'
+represents your shell prompt, and you are expected to enter the commands
+following it. If a line doesn't start with a '%', then it represents 
+what you are likely to see as command output.</i>
+<p>
+<h2>The basics</h2>
+<p>
+Let's first see if dbacl is properly installed on your system. At the shell prompt,
+type:
+<pre>
+% dbacl -V
+dbacl version 1.11
+Copyright (c) 2002,2003,2004,2005 L.A. Breyer. All rights reserved.
+dbacl comes with ABSOLUTELY NO WARRANTY, and is licensed
+to you under the terms of the GNU General Public License.
+.
+.
+</pre>
+If you get something that looks like this, then you know that dbacl is installed
+and ready to use. If the shell can't find the command <i>dbacl</i>, then you
+most likely need to download and install the program, as explained in the next section.
+
+
+
+ If you get an error, you need to install the program first (read the next section).
+If you've built the program from sources yourself and your shell still can't find dbacl,
+then you need to indicate the full path to the program each time.
+
+<p>
+<h2>Installation time</h2>
+<p>
+Since <a href="http://www.lbreyer.com/gpl.html">dbacl</a> is an open
+source (GPL) program, you are likely to first encounter it in one
+of two forms: a source code form as a compressed tar file named
+something like <i>dbacl-1.11.tar.gz</i>, or a preinstalled binary
+form that comes with your GNU/Linux or other operating system.
+<p>
+In the source code form you are expected to first build the program in the usual way:
+<pre>
+% tar xfz dbacl-1.11.tar.gz
+% cd dbacl-1.11
+% ./configure && make
+</pre>
+If something goes wrong during the build, you will see an error message and the
+build will not finish. Troubleshooting the build is beyond the scope of
+this document, so let's assume it finished without errors.
+<p>
+How do we know that the freshly built programs operate correctly? We run
+some standard tests:
+<pre>
+% make check
+.
+.
+===================
+All 55 tests passed
+===================
+.
+.
+</pre>
+<p>
+This command produces a lot of output on your terminal, but the important
+line is the one indicating whether all tests have passed. Normally, when
+dbacl is packaged, all the test are guaranteed to pass, but small differences
+between computer systems can cause failures. By running "make check" you
+will know if things are working on <i>your</i> system. If you see a failure,
+it is most likely that some error message during the build steps will point to
+some difficulties which you can fix.
+<p>
+<i>On some systems, it is possible that a handful of tests will fail
+because the configure script cannot find a suitable Unicode
+environment. In that case, the error output contains "nbsp;" tokens
+which could not be converted to spaces. This is harmless.</i>
+<p>
+Finally, you must install the freshly built programs in the correct location
+on your system. The simplest way is to type as root:
+<pre>
+% make install-strip
+</pre>
+<p>
+If your version of dbacl was preinstalled on your operating system, then
+you do not need to build the programs from source, and you cannot "make check"
+to see if the tests passed. However, you can normally trust the distributor
+of your operating system and assume that all the build tests were successful.
+
+<p>
+<h2>Sanity checks</h2>
+<p>
+There are two simple ways to check that dbacl works correctly. The first way
+is to read the tutorials and type yourself the commands given there.
+The tutorials and where to find them are listed in the dbacl man page,
+which you can read by typing
+<pre>
+% man dbacl
+</pre>
+You should expect to see nearly identical output as described in the tutorials.
+<p>
+The second way to check that dbacl works is to run a small classification
+test with your own email collections. This is a better test because it gives
+you confidence that the system will work <i>for you</i>. Below is just a quick
+explanation, the full details can be read by typing
+<pre>
+% man mailcross
+</pre>
+<p>
+You will need two mbox files containing collected emails of two different
+types. The types could be <i>spam</i> and <i>notspam</i>, or anything else,
+but make sure that the two mbox files do not have messages in common and 
+represent different topics. There should also be roughly the same number
+of messages in each. Now type the following (you can replace <i>spam</i> and
+<i>notspam</i> by any names you like):
+<pre>
+% mailcross prepare 5
+% mailcross add spam /path/to/spam.mbox
+% mailcross add notspam /path/to/notspam.mbox
+% mailcross learn
+% mailcross run
+% mailcross summarize
+</pre>
+<p>
+These commands could take a while depending on how big your mbox files are.
+The summary is a table which shows the number of errors in the experiment,
+which consists in learning some random subsets of the <i>spam.mbox</i> and
+<i>notspam.mbox</i>
+files and trying to predict the remaining messages. If all went well, you 
+should expect the number of errors to be less than 10%, but the exact percentage
+depends on how many messages you have, how easy to separate they are, and
+the default switches used by the test system.
+<p>
+Don't forget to clean up the mailcross temporary directory by typing
+<pre>
+% mailcross clean
+</pre>
+<p>
+<h2>Particular symptoms</h2>
+<p>
+If you've tried the things above and you still suspect things aren't working
+correctly, here is a small list of symptoms and their likely causes.
+<dl>
+<dt>dbacl seems to forget what it learns</dt>
+<dd>
+You keep feeding data to dbacl for learning, but it seems to forget
+everything very soon. This symptom occurs because dbacl truly does
+forget data. Unlike certain other spam filters, dbacl doesn't support
+incremental learning. You must teach it everything in one go. You can
+simulate incremental learning by keeping and growing a collection of training
+examples, and periodically teaching dbacl the full collection.
+</dd>
+</dl>
+</body>
+</html>

@@ -1,0 +1,803 @@
+<html>
+<title>Language models, classification and dbacl</title>
+<body>
+<h1><center>Language models, classification and dbacl</center></h1>
+<center><p>Laird A. Breyer</p></center>
+<h2>Introduction</h2>
+<p>
+This is a non-mathematical tutorial on how to use the dbacl Bayesian text
+classifier. The mathematical details can be read <a href="dbacl.ps">here</a>.
+<i>This tutorial was revised for dbacl 1.11. As dbacl evolves, some statements
+below may become inaccurate, but reasonable effort is made to keep the tutorial
+synchronized.</i>
+<p>
+<a href="http://www.lbreyer.com/gpl.html">dbacl</a> is a UNIX command
+line tool, so you will need to work at the shell prompt (here written
+%, even though we use bash semantics). The program comes with five
+sample text documents and a few scripts. Look for them in the same
+directory as this tutorial, or you can use any other plain text
+documents instead.  Make sure the sample documents you will use are in
+the current working directory. You need all <i>*.txt</i>, <i>*.pl</i>
+and <i>*.risk</i> files.
+<p>
+The tutorial below is geared towards generic text classification. If you
+intend to use dbacl for email classification, please read <a href="email.html">this</a>.
+<p>
+<h2>For the impatient</h2>
+<p>
+dbacl has two major modes of operation. The first is learning mode, where one
+or more text documents are analysed to find out what make them look the way
+they do. At the shell prompt, type (without the leading %)
+<pre>
+% dbacl -l one sample1.txt
+% dbacl -l two sample2.txt
+</pre>
+<p>
+This creates two files named <i>one</i> and <i>two</i>, which contain the important features of
+each sample document.
+<p>
+The second major mode is classification mode.
+Let's say that you want to see if <i>sample3.txt</i> is closer to <i>sample1.txt</i>
+or <i>sample2.txt</i>; type
+<pre>
+% dbacl -c one -c two sample3.txt -v
+one
+</pre>
+<p>
+and dbacl should tell you it thinks <i>sample3.txt</i> is less like <i>two</i> (which is the
+category learned from <i>sample2.txt</i>) and more like <i>one</i> (which is the
+category learned from <i>sample1.txt</i>). That's it.
+<p>
+<h2>Tips</h2>
+<p>
+Besides giving the best category (note: best means best among available choices only), dbacl can measure how sure it is of being right. Try this:
+<pre>
+% dbacl -c one -c two sample3.txt -U
+one # 100%
+</pre>
+In this case dbacl is very sure. If the percentage was zero, then it would
+mean that there is another equally likely category. Try this:
+<pre>
+% dbacl -c one -c two -c one sample3.txt -U
+one # 0%
+</pre>
+Obviously we've repeated the category <i>one</i> but dbacl treats them separately. dbacl can also print other measures of certainty besides the <i>-U</i> switch, but
+they take longer to explain. 
+<p>
+You can create as many categories as you want, <i>one</i>, <i>two</i>, <i>three</i>, <i>good</i>, <i>bad</i>, <i>important</i>, <i>jokes</i>, but remember that each one must be learned from a representative
+collection of plain text documents.
+<p>
+dbacl is designed to be easy to use within a script, so you can make it part of
+your own projects, perhaps a spam detection script, or an agent which automatically downloads the latest newspaper articles on your favourite topic... 
+<p>
+<i>Tip:</i> The category files are created in the current directory, or whichever path you indicate. If you want, you can keep all your category files in a single common directory. For example, if you use the bash shell, type
+<pre>
+% mkdir $HOME/.dbacl
+% echo "DBACL_PATH=$HOME/.dbacl" >> $HOME/.bashrc
+% source $HOME/.bashrc
+</pre>
+From now on, all your categories will be kept in $HOME/.dbacl, and searched for there.
+<p>
+<h2>Language models</h2>
+<p>
+dbacl works by scanning the text it learns for features, which can be nearly
+anything you like. For example, unless you tell it otherwise, the standard
+features are all alphabetic single words in the document. dbacl builds a
+statistical model, ie a probability distribution, based only on those features,
+so anything that is not a feature will be ignored both during learning, and
+during classification.
+<p>
+This dependence on features is a double edged sword, because it helps dbacl
+focus on the things that matter (single alphabetic words by default), but
+if something else matters more then it is ignored if you don't tell dbacl it's a
+feature. This is the hard part, and it's up to you.
+<p>
+When telling dbacl what kind of features to look out for, you must use the language of regular expressions. For example, if you think the only interesting features for category <i>one</i> are words which contain the letter 'q', then you would type
+<pre>
+% dbacl -l justq -g '^([a-zA-Z]*q[a-zA-Z]*)' \
+  -g '[^a-zA-Z]([a-zA-Z]*q[a-zA-Z]*)' sample2.txt
+</pre>
+<p>
+The rule is that dbacl always takes as a feature whatever it finds within round brackets.
+Reading this can be painful if you don't know regular expressions, however.
+<p>
+In English, the first expression after the -g option above reads: take as a feature
+any string which looks like: <b>"start of the line"</b> (written ^) followed by <b>"zero or more
+characters within the range a-z or A-Z"</b> (written [a-zA-Z]*), followed by <b>"the character q"</b> (written q), followed by <b>"zero or more characters within the range a-z or A-Z"</b> (written [a-zA-Z]*). The second expression is nearly identical: <b>"a single character which is not in the range a-zA-Z"</b> (written [^a-zA-Z]), followed by <b>"zero or more characters within the range a-z or A-Z"</b> (can you guess?), followed by <b>"the character q"</b>, followed by <b>"zero or more characters within the range a-z or A-Z"</b>. The single quote marks are used to keep the whole expression together.
+<p>
+A regular expression is a simultaneous superposition of many text strings. Just
+like a word, you read and write it one character at a time.
+<p>
+<table border="1" rules="all">
+  <tr>
+    <td><b>Symbol</b></td>
+    <td><b>What it means</b></td>
+  </tr>
+  <tr>
+    <td>.</td>
+    <td>any character except newline</td>
+  </tr>
+  <tr>
+    <td>*</td>
+    <td>zero or more copies of preceding character or parenthesized expression</td>
+  </tr>
+  <tr>
+    <td>+</td>
+    <td>one or more copies of preceding character or parenthesized expression</td>
+  </tr>
+  <tr>
+    <td>?</td>
+    <td>zero or one copies of preceding character or parenthesized expression</td>
+  </tr>
+  <tr>
+    <td>^</td>
+    <td>beginning of line</td>
+  </tr>
+  <tr>
+    <td>$</td>
+    <td>end of line</td>
+  </tr>
+  <tr>
+    <td>a|b</td>
+    <td>a or b</td>
+  </tr>
+  <tr>
+    <td>[abc]</td>
+    <td>one character equal to a, b or c</td>
+  </tr>
+  <tr>
+    <td>[^abc]</td>
+    <td>one character not equal to a, b or c</td>
+  </tr>
+  <tr>
+    <td>\*, \?, or \.</td>
+    <td>the actual character *, ? or .</td>
+  </tr>
+</table>
+<p>
+To get a feel for the kinds of features taken into account by dbacl in the example above, you can use the -D option. Retype the above in the slightly changed form
+<pre>
+% dbacl -l justq -g '^([a-zA-Z]*q[a-zA-Z]*)' \
+ -g '[^a-zA-Z]([a-zA-Z]*q[a-zA-Z]*)' sample2.txt -D | grep match
+match d191e93e []acquired[](1) 1
+match 8c56f142 []inquire[](1) 1
+match 7a2ccda2 []inquiry[](1) 1
+match 38f595f3 []consequently[](1) 1
+match a52053f2 []questions[](1) 1
+match 78a0e302 []question[](1) 1
+</pre>
+<p>
+This command lists the first few matches, one per line, which exist in the <i>sample1.txt</i> document. Obviously, only taking into account features which consist of words with the letter 'q' in them makes a poor model. However, when
+you are trying out regular expressions, you can compare this output with the
+contents of the document to see if your expression misses out on words or reads too many. 
+<p>
+Sometimes, it's convenient to use parentheses which you want to throw away. dbacl
+understands the special notation ||xyz which you can place at the end of a regular expression, where x, y, z  should be digits corresponding to the parentheses
+you want to keep.
+Here is an example for mixed Japanese and English documents, which matches alphabetic words and single ideograms:
+<pre>
+% LANG=ja_JP dbacl -D -l konichiwa japanese.txt -i \
+ -g '(^|[^a-zA-Z0-9])([a-zA-Z0-9]+|[[:alpha:]])||2'
+</pre>
+<p>
+Note that you need a multilingual terminal and Japanese fonts to view this, and
+your computer must have a Japanese locale available.
+<p>
+In the table below, you will find a list of some simple regular expressions to get you started:
+<p>
+<table border="1" rules="all">
+  <tr>
+    <td><b>If you want to match...</b></td>
+    <td><b>Then you need this expression...</b></td>
+    <td><b>Examples</b></td>
+  </tr>
+  <tr>
+    <td>alphabetic words</td>
+    <td>(^|[^[:alpha:]]) ([[:alpha:]]+) ||2
+    </td>
+    <td>hello, kitty</td>
+  </tr>
+  <tr>
+    <td>words in capitals</td>
+    <td>(^|[^[A-Z]]) ([A-Z]+) ||2
+    </td>
+    <td>MAKE, MONEY, FAST</td>
+  </tr>
+  <tr>
+    <td>strings of characters separated by spaces</td>
+    <td>(^|[ ]) ([^ ]+) ||2
+    </td>
+    <td>w$%&tf9(, amazing!, :-)</td>
+  </tr>
+  <tr>
+    <td>time of day</td>
+    <td>(^|[^0-9]) ([0-9?[0-9]:[0-9][0-9](am|pm)) ||2
+    </td>
+    <td>9:17am, 12:30pm</td>
+  </tr>
+  <tr>
+    <td>words which end in a number</td>
+    <td>(^|[^a-zA-Z0-9]) ([a-zA-Z]+[0-9]+) [^a-zA-Z] ||2
+    </td>
+    <td>borg17234, A1</td>
+  </tr>
+  <tr>
+    <td>alphanumeric word pairs</td>
+	<td>(^|[^[:alnum:]]) ([[:alnum:]]+) [^[:alnum:]]+ ([[:alnum:]]+) ||23
+	</td>
+	<td>good morning, how are</td>
+  </tr>
+</table>
+<p>
+The last entry in the table above shows how to take word pairs as features.
+Such models are called bigram models, as opposed to the unigram models whose
+features are only single words, and they are used to capture extra information.
+<p>
+For example, in a unigram model the pair of words "well done" and "done well" have
+the same probability. A bigram model can learn that "well done" is more common in food related documents (provided this combination of words was actually found within the learning corpus).
+<p>
+However, there is a big statistical problem: because there exist many more meaningful bigrams than unigrams, you'll need a much bigger corpus to obtain meaningful statistics. One way around this is a technique called smoothing, which predicts unseen bigrams from already seen unigrams. To obtain such a
+combined unigram/bigram alphabetic word model, type
+<pre>
+% dbacl -l smooth -g '(^|[^a-zA-Z])([a-zA-Z]+)||2' \
+ -g '(^|[^a-zA-Z])([a-zA-Z]+)[^a-zA-Z]+([a-zA-Z]+)||23' sample1.txt
+</pre>
+<p>
+If all you want are alphabetic bigrams, trigrams, etc, there is a special switch
+-w you can use. The command
+<pre>
+% dbacl -l slick -w 2 sample1.txt
+</pre>
+<p>
+produces a model <i>slick</i> which is nearly identical to <i>smooth</i> (the difference is that a regular expression cannot straddle newlines, but -w ngrams can). Let's look at the first few features: type
+<pre>
+% dbacl -l slick -w 2 sample1.txt -D | grep match | head -10
+match 818ad280 []tom[](1) 1
+match 5d20c0e2 []tom[]no[](1) 2
+match 3db5da99 []no[](1) 1
+match 4a18ad66 []no[]answer[](1) 2
+match eea4a1c4 []answer[](1) 1
+match 95392743 []answer[]tom[](1) 2
+match 61cc1403 []answer[]what[](1) 2
+match 8c953ec2 []what[](1) 1
+match 4291d86e []what[]s[](1) 2
+match b09aa375 []s[](1) 1
+</pre>
+You can see both pairs and single words, all lower case because dbacl
+converts everything to lower case unless you tell it otherwise. This saves
+a little on memory. But what did the original document look like?
+<pre>
+% head -10 sample1.txt 
+"TOM!"
+
+No answer.
+
+"TOM!"
+
+No answer.
+
+"What's gone with that boy,  I wonder? You TOM!"
+
+</pre>
+Now you see how the pairs are formed. But wait, the pair of words
+("TOM!", No) occurs twice in the text, but only once in the list of matches?
+Did we miss one? No, look again at the line
+<pre>
+match 5d20c0e2 []tom[]no[](1) 2
+</pre>
+and you will see that the last value is '2', since we've seen it twice.
+dbacl uses the frequencies of features to build its model.
+<p>
+Obviously, all this typing is getting tedious, and you will eventually
+want to automate
+the learning stage in a shell script. Use regular expressions sparingly, as
+they can quickly degrade the performance (speed and memory) of dbacl. See
+<a href="#appendix">Appendix A</a> for ways around this.
+
+<h2>Evaluating the models</h2>
+<p>
+Now that you have a grasp of the variety of language models which dbacl can generate, the important question is what set of features should you use?
+<p>
+There is no easy answer to this problem.
+Intuitively, a larger
+set of features seems always preferable,
+since it takes more information into account.
+However, there is a tradeoff.
+Comparing more features requires extra memory,
+but much more importantly, too many features can <i>overfit</i> the data.
+This results
+in a model which is so good at predicting the learned documents,
+that virtually no other documents are considered even remotely similar.
+<p>
+It is beyond the scope of this tutorial to describe the variety of statistical
+methods which can help decide what features are meaningful. However, to get a
+rough idea of the quality of the  model, we can look at the cross entropy
+reported by dbacl.
+<p>
+The cross entropy is measured in bits and has the following meaning:
+If we use our probabilistic model to construct an optimal compression algorithm,
+then the cross entropy of a text string is the predicted number of bits which is needed on average, after compression, for each separate feature.
+This rough description isn't complete, since the cross entropy doesn't measure the amount of space also needed for the probability model itself, and moreover
+what we mean by compression is the act of compressing the features, not the full
+document, which also contains punctuation and white space which is ignored.
+<p>
+To compute the cross entropy of category <i>one</i>, type
+<pre>
+% dbacl -c one sample1.txt -vn
+one  7.42 * 678.0
+</pre>
+<p>
+The cross entropy is the first value (7.42) returned. The second value essentially
+measures how many features describe the document.
+Now suppose we try other models trained on the same document:
+<pre>
+% dbacl -c slick sample1.txt -vn
+slick  4.68 * 677.5
+% dbacl -c smooth sample1.txt -vn
+smooth  6.03 * 640.5
+</pre>
+<p>
+The first thing to nota is that the complexity terms are not the same. The
+<i>slick</i> category is based on word pairs (also called bigrams), of
+which tere are 677 in this document. But there are 678 words, and the
+fractional value indicates that the last word only counts for half a
+feature. The <i>smooth</i> category also depends on word pairs, but
+unlike <i>slick</i>, pairs cannot be counted if they straddle a
+newline (this is a limitation of line-oriented regular expressions).
+So in <i>smooth</i>, there are several missing word pairs, and various
+single words which count as a fractional pair, giving a grand total of
+640.5.
+<p>
+The second thing to note is that both bigram models fit <i>sample1.txt</i> better. This is
+easy to see for <i>slick</i>, since the complexity (essentially the number of features)
+is nearly the same as for <i>one</i>, so the comparison reduces to seeing
+which cross entropy is lowest.
+Let's ask dbacl which category fits better:
+<pre>
+% dbacl -c one -c slick sample1.txt -v
+slick
+</pre>
+<p>
+You can do the same thing to compare <i>one</i> and <i>smooth</i>.
+Let's ask dbacl which category fits better overall:
+<pre>
+% dbacl -c one -c slick -c smooth sample1.txt -v
+slick
+</pre>
+<p>
+We already know that <i>slick</i> is better than <i>one</i>, but why is
+<i>slick</i> better than <i>smooth</i>? While <i>slick</i> looks at more
+features than <i>smooth</i> (677.5 versus 640.5), it needs just 4.68 bits
+of information per feature to represent the <i>sample1.txt</i> document,
+while <i>smooth</i> needs 6.03 bits on average. So <i>slick</i> wins based
+on economies of scale. 
+<p>
+<b>
+WARNING: it is not always appropriate to classify documents whose models
+look at different feature set like we did above. The underlying statistical
+basis for these comparisons is the likelihood, but it is easy to 
+compare "apples and oranges" incorrectly. It is safest if you learn and 
+classify documents by using exactly the same command line switches
+for every category.
+</b>
+
+<h2>Decision Theory</h2>
+<p>
+If you've read this far, then you probably intend to use dbacl to
+automatically classify text documents, and possibly execute
+certain actions depending on the outcome. The bad news is that dbacl isn't designed for this. The good news is that there is a companion program, bayesol,
+which is. To use it, you just need to learn some Bayesian Decision Theory.
+<p>
+We'll suppose that the document <i>sample4.txt</i> must be classified in one of the
+categories <i>one</i>, <i>two</i> and <i>three</i>.
+To make optimal decisions, you'll need three ingredients: a <b>prior distribution</b>,
+a set of <b>conditional probabilities</b> and a <b>measure of risk</b>. We'll get to these
+in turn. 
+<p>
+The <b>prior distribution</b> is a set of weights, which you must choose yourself,
+representing your beforehand beliefs. You choose this before you even look at
+<i>sample4.txt</i>. For example, you might know from experience that category <i>one</i> is twice as
+likely as two and three. The prior distribution is a set of weights you choose
+to reflect your beliefs, e.g. <i>one</i>:2, <i>two</i>:1, <i>three</i>:1. If you have no idea what to
+choose, give each an equal weight (<i>one</i>:1, <i>two</i>:1, <i>three</i>:1).
+<p>
+Next, we need <b>conditional probabilities</b>. This is what dbacl is for. Type
+<pre>
+% dbacl -l three sample3.txt
+% dbacl -c one -c two -c three sample4.txt -N
+one  0.00% two 100.00% three  0.00%
+</pre>
+<p>
+As you can see, dbacl is 100% sure that <i>sample4.txt</i> resembles category <i>two</i>.
+Such accurate answers are typical with the kinds of models used by dbacl.
+In reality, the probabilities for <i>one</i> and <i>three</i> are very, very small and
+the probability for <i>two</i> is really close, but not equal to 1.
+See <a href="#appendix2">Appendix B</a> for a rough explanation.
+<p>
+We combine the prior (which represents your own beliefs and experiences) with
+the conditionals (which represent what dbacl thinks about <i>sample4.txt</i>) to obtain
+a set of <b>posterior probabilities</b>. In our example,
+<ul>
+<li>Posterior probability that <i>sample4.txt</i> resembles <i>one</i>: 0%*2/(2+1+1) = 0%
+<li>Posterior probability that <i>sample4.txt</i> resembles <i>two</i>: 100%*1/(2+1+1) = 100%
+<li>Posterior probability that <i>sample4.txt</i> resembles <i>three</i>: 0%*1/(2+1+1) = 0%
+</ul>
+Okay, so here the prior doesn't have much of an effect. But it's
+there if you need it.
+<p>
+Now comes the tedious part.
+What you really want to do
+is take these posterior distributions under advisement, and make
+an informed decision. 
+<p>
+To decide which category best suits your own plans, you need to work
+out the <b>costs of misclassifications</b>. Only you can decide these numbers, and there
+are many. But at the end, you've worked out your risk. Here's an example:
+<ul>
+<li>If <i>sample4.txt</i> is like <i>one</i> but it ends up marked like <i>one</i>, then the cost is <b>0</b>
+<li>If <i>sample4.txt</i> is like <i>one</i> but it ends up marked like <i>two</i>, then the cost is <b>1</b>
+<li>If <i>sample4.txt</i> is like <i>one</i> but it ends up marked like <i>three</i>, then the cost is <b>2</b>
+<li>If <i>sample4.txt</i> is like <i>two</i> but it ends up marked like <i>one</i>, then the cost is <b>3</b>
+<li>If <i>sample4.txt</i> is like <i>two</i> but it ends up marked like <i>two</i>, then the cost is <b>0</b>
+<li>If <i>sample4.txt</i> is like <i>two</i> but it ends up marked like <i>three</i>, then the cost is <b>5</b>
+<li>If <i>sample4.txt</i> is like <i>three</i> but it ends up marked like <i>one</i>, then the cost is <b>1</b>
+<li>If <i>sample4.txt</i> is like <i>three</i> but it ends up marked like <i>two</i>, then the cost is <b>1</b>
+<li>If <i>sample4.txt</i> is like <i>three</i> but it ends up marked like <i>three</i>, then the cost is <b>0</b>
+</ul>
+These numbers are often placed in a table called the loss matrix (this
+way, you can't forget a case), like so:
+<p>
+<table border="1" rules="all">
+  <tr>
+    <td rowspan="2"><b>correct category</b></td>
+    <td colspan="3"><b>misclassified as</b></td>
+  </tr>
+  <tr>
+    <td><i>one</i></td>
+    <td><i>two</i></td>
+    <td><i>three</i></td>
+  </tr>
+  <tr>
+    <td><i>one</i></td>
+    <td><b>0</b></td>
+    <td><b>1</b></td>
+    <td><b>2</b></td>
+  </tr>
+  <tr>
+    <td><i>two</i></td>
+    <td><b>3</b></td>
+    <td><b>0</b></td>
+    <td><b>5</b></td>
+  </tr>
+  <tr>
+    <td><i>three</i></td>
+    <td><b>1</b></td>
+    <td><b>1</b></td>
+    <td><b>0</b></td>
+  </tr>
+</table>
+
+<p>
+We are now ready to combine all these numbers to obtain the True Bayesian Decision.
+For every possible category, we simply weigh the risk with the posterior
+probabilities of obtaining each of the possible misclassifications. Then we choose the category with least expected posterior risk.
+<p>
+<ul>
+<li>For category <i>one</i>, the expected risk is <b>0</b>*0% + <b>3</b>*1000% + <b>1</b>*0% = <b>3</b>
+<li>For category <i>two</i>, the expected risk is <b>1</b>*0% + <b>0</b>*100% + <b>1</b>*0% = <b>0</b> <-- smallest
+<li>For category <i>three</i>, the expected risk is <b>2</b>*0% + <b>5</b>*100% + <b>0</b>*0% = <b>5</b>    
+</ul>
+<p>
+The lowest expected risk is for caterogy <i>two</i>, so that's the category we choose
+to represent <i>sample4.txt</i>. Done!
+<p>
+Of course, the loss matrix above doesn't really have an effect on the
+probability calculations, because the conditional probabilities strongly point to
+category <i>two</i> anyway. But now you understand how the calculation works. Below, we'll look at a more realistic example (but still specially chosen to illustrate some points).
+<p>
+One last point: you may wonder how dbacl itself decides which category to
+display when classifying with the -v switch. The simple answer is that dbacl always
+displays the category with maximal conditional probability (often called the MAP estimate). This is mathematically completely equivalent to the special case of decision theory when the prior has equal weights, and the loss matrix takes the value 1 everywhere, except on the diagonal (ie correct classifications have no cost, everything else costs 1).
+
+<h2>Using bayesol</h2>
+<p>
+bayesol is a companion program for dbacl which makes the decision calculations
+easier. The bad news is that you still have to write down a prior and loss matrix
+yourself. Eventually, someone, somewhere may write a graphical interface.
+The good news is that for most classification tasks, you don't need to 
+bother with bayesol at all, and can skip this section. Really. 
+<p>
+bayesol reads a risk specification file, which is a text file containing information about the categories required, the prior distribution and the cost of
+misclassifications. For the toy example discussed earlier, the file <i>toy.risk</i> looks like this:
+<pre>
+categories {
+    one, two, three
+}
+prior {
+    2, 1, 1
+}
+loss_matrix {
+"" one   [ 0, 1, 2 ]
+"" two   [ 3, 0, 5 ]
+"" three [ 1, 1, 0 ]
+}
+</pre>
+<p>
+Let's see if our hand calculation was correct:
+<pre>
+% dbacl -c one -c two -c three sample4.txt -vna | bayesol -c toy.risk -v
+two
+</pre>
+<p>
+Good! However, as discussed above, the misclassification costs need
+improvement. This is completely up to you, but here are some possible
+suggestions to get you started.
+<p>
+To devise effective loss matrices, it pays to think about the way that dbacl
+computes the probabilities. <a href="#appendix2">Appendix B</a> gives some
+details, but we don't need to go that far. Recall that the language models are
+based on features (which are usually kinds of words).
+Every feature counts towards the final probabilities, and a big document
+will have more features, hence more opportunities to steer the
+probabilities one way or another. So a feature is like an information
+bearing unit of text.
+<p>
+When we read a text document which doesn't accord with our expectations, we
+grow progressively more annoyed as we read further into the text. This is like
+an annoyance interest rate which compounds on information units within the text.
+For dbacl, the number of information bearing units is reported as the complexity
+of the text.
+This suggests that the cost of reading a misclassified document could have the
+form (1 + interest)^complexity. Here's an example loss matrix which uses this idea
+<pre>
+loss_matrix { 
+"" one   [ 0,               (1.1)^complexity,  (1.1)^complexity ]
+"" two   [(1.1)^complexity, 0,                 (1.7)^complexity ] 
+"" three [(1.5)^complexity, (1.01)^complexity, 0 ]
+} 
+</pre>
+<p>
+Remember, these aren't monetary interest rates, they are value judgements.
+You can see this loss matrix in action by typing
+<pre>
+% dbacl -c one -c two -c three sample5.txt -vna | bayesol -c example1.risk -v
+three
+</pre>
+<p>
+Now if we increase the cost of misclassifying <i>two</i> as <i>three</i> from
+1.7 to 2.0, the optimal category becomes
+<pre>
+% dbacl -c one -c two -c three sample5.txt -vna | bayesol -c example2.risk -v
+two
+</pre>
+<p>
+bayesol can also handle infinite costs. Just write "inf" where you need it.
+This is particularly useful with regular expressions. If you look at each
+row of loss_matrix above, you see an empty string "" before each category.
+This indicates that this row is to be used by default in the actual loss matrix.
+But sometimes, the losses can depend on seeing a particular string in the document we want to classify.
+<p>
+Suppose you normally like to use the loss matrix above, but in case the
+document contains the word "Polly", then the cost of misclassification
+is infinite. Here is an updated loss_matrix:
+<pre>
+loss_matrix { 
+""          one   [ 0,               (1.1)^complexity,  (1.1)^complexity ]
+"Polly"     two   [ inf,             0,                 inf ]
+""          two   [(1.1)^complexity, 0,                 (2.0)^complexity ] 
+""          three [(1.5)^complexity, (1.01)^complexity, 0 ]
+}
+</pre>
+<p>
+bayesol looks in its input for the regular expression "Polly", and if it
+is found, then for misclassifications away from <i>two</i>,
+it uses the row with the infinite values, otherwise it uses the default
+row, which starts with "". If you have several rows with regular expressions
+for each category, bayesol always uses the first one from the top which
+matches within the input. You must always have at least a default row for
+every category.
+<p>
+The regular expression facility can also be used to perform more complicated
+document dependent loss calculations. Suppose you like to count the number
+of lines of the input document which start with the character '>', as a
+proportion of the total number of lines in the document. The following perl script transcribes its input and appends the calculated proportion.
+<pre>
+#!/usr/bin/perl 
+# this is file prop.pl
+
+$special = $normal = 0; 
+while(&lt;SDTIN&gt;) {
+    $special++ if /^ >/; 
+    $normal++; 
+    print; 
+} 
+$prop = $special/$normal; 
+print "proportion: $prop\n"; 
+</pre>
+<p>
+If we used this script, then we could take the output of dbacl, append the
+proportion of lines containing '>', and pass the result as input to bayesol.
+For example, the following line is included in the <i>example3.risk</i>
+specification
+<pre>
+"^proportion: ([0-9.]+)" one [ 0, (1+$1)^complexity, (1.2)^complexity ]
+</pre>
+<p>
+and through this, bayesol reads, if present,
+the line containing the proportion we
+calculated and
+takes this into account when it constructs the loss matrix.
+You can try this like so:
+<pre>
+% dbacl -T email -c one -c two -c three sample6.txt -nav \
+  | perl prop.pl | bayesol -c example3.risk -v
+</pre>
+<p>
+Note that in the loss_matrix specification 
+above, $1 refers to the <i>numerical</i> value of the
+quantity inside the parentheses. Also, it is useful to remember that
+when using the -a switch, dbacl outputs all the original lines
+from <i>unknown.txt</i> with an extra space in front of them. If another
+instance of dbacl needs to read this output again (e.g. in a pipeline),
+then the latter should be invoked with the -A switch.
+
+<h2>Miscellaneous</h2>
+<p>
+Be careful when classifying very small strings.
+Except for the multinomial models (which includes the default model),
+the dbacl calculations are optimized for large strings
+with more than 20 or 30 features.
+For small text lines, the complex models give only approximate scores.
+In those cases, stick with unigram models, which are always exact.
+<p>
+In the UNIX philosophy, programs are small and do one thing well. Following this philosophy, dbacl essentially only reads plain text documents. If you have non-textual documents (word, html, postscript) which you want to learn from, you will need to use specialized tools to first convert these into plain text. There are many free tools available for this.
+<p>
+dbacl has limited support for reading mbox files (UNIX email) and can filter out html tags in a quick and dirty way, however this is only intended as a convenience, and should not be relied upon to be fully accurate.
+
+<h2><a name="appendix">Appendix A: memory requirements</a></h2>
+<p>
+When experimenting with complicated models, dbacl will quickly fill up its hash
+tables. dbacl is designed to use a predictable amount of memory (to prevent nasty surprises on some systems). The default hash table size in version 1.1 is 15, which is enough for 32,000 unique features and produces a 512K category file on my system. You can use the -h switch to select hash table size, in powers of two. Beware that learning takes much more memory than classifying. Use the -V switch to find out the cost per feature. On my system, each feature costs 6 bytes for classifying but 17 bytes for learning.  
+<p>
+For testing, I use the collected works of Mark Twain, which is a 19MB pure text file. Timings are on a 500Mhz Pentium III.
+<p>
+<table border="1" rules="all">
+  <tr>
+    <td><b>command</b></td>
+    <td><b>Unique features</b></td>
+    <td><b>Category size</b></td>
+    <td><b>Learning time</b></td>
+  </tr>
+  <tr>
+    <td>dbacl -l twain1 Twain-Collected_Works.txt -w 1 -h 16</td>
+    <td align="right">49,251</td>
+    <td align="right">512K</td>
+    <td>0m9.240s</td>
+  </tr>
+  <tr>
+    <td>dbacl -l twain2 Twain-Collected_Works.txt -w 2 -h 20</td>
+    <td align="right">909,400</td>
+    <td align="right">6.1M</td>
+    <td>1m1.100s</td>
+  </tr>
+  <tr>
+    <td>dbacl -l twain3 Twain-Collected_Works.txt -w 3 -h 22</td>
+    <td align="right">3,151,718</td>
+    <td align="right">24M</td>
+    <td>3m42.240s</td>
+  </tr>
+</table>
+<p>
+As can be seen from this table, including bigrams and trigrams has a noticeable
+memory and performance effect during learning. Luckily, classification speed
+is only affected by the number of features found in the unknown document.
+<p>
+<table border="1" rules="all">
+  <tr>
+    <td><b>command</b></td>
+    <td><b>features</b></td>
+    <td><b>Classification time</b></td>
+  </tr>
+  <tr>
+    <td>dbacl -c twain1 Twain-Collected_Works.txt</td>
+    <td>unigrams</td>
+    <td align="right">0m4.860s</td>
+  </tr>
+  <tr>
+    <td>dbacl -c twain2 Twain-Collected_Works.txt</td>
+    <td>unigrams and bigrams</td>
+    <td align="right">0m8.930s</td>
+  </tr>
+  <tr>
+    <td>dbacl -c twain3 Twain-Collected_Works.txt</td>
+    <td>unigrams, bigrams and trigrams</td>
+    <td align="right">0m12.750s</td>
+  </tr>
+</table>
+<p>
+The heavy memory requirements during learning of complicated models can be
+reduced at the expense of the model itself. dbacl has a feature decimation switch
+which slows down the hash table filling rate by simply ignoring many of the
+features found in the input. 
+
+<h2><a name="appendix2">Appendix B: Extreme probabilities</a></h2>
+<p>
+Why is the result of a dbacl probability calculation always so accurate?
+<pre>
+% dbacl -c one -c two -c three sample4.txt -N
+one 0.00% two  100.00% three  0.00%
+</pre>
+<p>
+The reason for this has to do with the type of model which dbacl uses. Let's
+look at some scores:
+<pre>
+% dbacl -c one -c two -c three sample4.txt -n
+one 13549.34 two 8220.22 three 13476.84 
+% dbacl -c one -c two -c three sample4.txt -nv
+one 26.11 * 519.0 two 15.84 * 519.0 three 25.97 * 519.0
+</pre>
+<p>
+The first set of numbers are minus the logarithm (base 2) of each category's
+probability of producing the full document <i>sample4.txt</i>. This represents the
+evidence <i>away</i> from each category, and is measured in bits.
+<i>one</i> and <i>three</i> are fairly even, but <i>two</i> has by far
+the lowest score and hence highest probability (in other words, the model
+for <i>two</i> is the least bad at predicting <i>sample4.txt</i>, so if there are only
+three possible choices, it's the best). 
+To understand these numbers, it's best to split each of them up into
+a product of cross entropy and complexity, as is done in the second line.
+<p>
+Remember that dbacl calculates probabilities about resemblance
+by weighing the evidence for all the features found in the input document.
+There are 519 features in <i>sample4.txt</i>, and each feature contributes on average 26.11 bits of evidence against category <i>one</i>, 15.84 bits against category <i>two</i> and 25.97 bits against category <i>three</i>. Let's look at what happens if we only look at the first 25 lines of <i>sample4.txt</i>:
+<pre>
+% head -25 sample4.txt | dbacl -c one -c two -c three -nv
+one 20.15 * 324.0 two 15.18 * 324.0 three 20.14 * 324.0
+</pre>
+<p>
+There are fewer features in the first 25 lines of <i>sample4.txt</i> than in the full
+text file, but the picture is substantially unchanged. 
+<pre>
+% head -25 sample4.txt | dbacl -c one -c two -c three -N
+one  0.00% two 100.00% three  0.00%
+</pre>
+<p>
+dbacl is still very sure, because it has looked at many features (324) and found
+small differences which add up to quite different scores. However, you can see that
+each feature now contributes less information (20.15, 15.18, 20.14) bits compared
+to the earlier (26.11, 15.84, 25.97).
+<p>
+Since category <i>two</i> is obviously the best (closest to zero) choice among the
+three models, let's drop it for a moment and consider the other two categories.
+We also reduce dramatically the number of features (words) we shall look at. The first line
+of <i>sample4.txt</i> has 15 words:
+<pre>
+% head -1 sample4.txt | dbacl -c one -c three -N
+one 25.65% three 74.35%
+</pre>
+Finally, we are getting probabilities we can understand! Unfortunately, this
+is somewhat misleading. Each of the 15 words gave a score
+and these scores were added for each category. Since both categories here are about equally
+bad at predicting words in <i>sample4.txt</i>, the difference in the final scores for category
+<i>one</i> and <i>three</i> amounts to less than 3 bits of information, which is why the
+probabilities are mixed:
+<pre>
+% head -1 sample4.txt | dbacl -c one -c three -nv
+one 16.61 * 15.0 three 16.51 * 15.0
+</pre>
+<p>
+So the interpretation of the probabilities is clear. dbacl weighs the
+evidence from each feature it finds, and reports the best fit among the choices
+it is offered. Because it sees so many features separately (hundreds usually), it believes
+its verdict is very sure. Wouldn't you be after hundreds of checks? 
+Of course, whether these
+features are independent, and are the right features to look at for best classification is another
+matter entirely, and it's entirely up to you to decide. dbacl can't do much
+about its inbuilt assumptions.
+<p>
+Last but not least, the probabilities above are not the same as the
+confidence percentages printed by the -U switch. The -U switch was developed
+to overcome the limitations above, by looking at dbacl's calculations
+from a higher level, but this is a topic for another time.
+</body>
+</html>

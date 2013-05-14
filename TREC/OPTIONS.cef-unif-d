@@ -1,0 +1,6 @@
+# these settings are interesting for the SA corpus
+DBACL_LOPTS='-H 25 -1 -T email -T email:headers -T email:theaders -T html:links -T html:alt -L uniform -e cef -j'
+DBACL_COPTS='-nv'
+DBACL_CHAM='ham[ ]*\([^ ]*\)'
+DBACL_CSPAM='.* spam[ ]*\([^ ]*\)'
+DBACL_SGN=''

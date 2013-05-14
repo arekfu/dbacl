@@ -1,0 +1,5 @@
+DBACL_LOPTS='-H 25 -1 -T email'
+DBACL_COPTS='-n'
+DBACL_CHAM='ham[ ]*\([^ ]*\)'
+DBACL_CSPAM='.* spam[ ]*\([^ ]*\)'
+DBACL_SGN=''

@@ -1,0 +1,203 @@
+		DBACL - digramic Bayesian classifier
+
+PURPOSE
+
+dbacl is a command line program which can be used to categorize
+several types of text documents. Each document category is
+constructed as a maximum entropy language model, with respect to
+a reference measure based on digrams (character pairs).
+
+Before recognition can take place, a number of text corpora must 
+be "learned". For example, an English category could be based on 
+a text file containing the collected works of Shakespeare. The 
+Gutenberg project (http://promo.net/pg/) makes freely available
+many public domain works in electronic form.
+
+After learning, any number of text files can be compared, in terms 
+of Bayesian posterior probabilities, with up to 128 learned categories.
+The actual number of categories is limited only by available memory, and
+can be changed by editing dbacl.h and recompiling.
+
+Last but not least, dbacl also has special support for email message
+formats, which permits its use as an email filter. Explanations and
+instructions are in the man pages and bundled tutorials.
+
+dbacl is bundled with a few other utilities:
+
+- bayesol is a postprocessor which takes the dbacl output and computes
+  an optimal decision based on costs of misclassification. Together with
+  dbacl, this allows the construction of sophisticated, multilingual, 
+  classification scripts, if you're not afraid of some shell scripting.
+
+- mailcross performs email classification cross validation. It can be used
+  to assess the performance of custom email classification scripts based on
+  dbacl and bayesol. It also has a testsuite functionality to compare dbacl
+  with other open source email filters on your own email collections (this
+  functionality existed separately in the 1.5 series, but has been merged now).
+  At time of writing, 11 different mail classifiers can be compared.
+
+- mailtoe performs train on error (TOE) simulation. This command is virtually
+  identical to mailcross. In particular, it allows TOE comparisons between 
+  dbacl and other email filters.
+
+- mailfoot performs fully ordered online training simulation. It functions
+  like mailcross and mailtoe.
+
+- mailinspect reads an mbox style mail folder and displays the emails in sorted
+  order, based on similarity to any given category. 
+ 
+DOCUMENTATION
+
+See the bundled manpages. Generic instructions can be found in the
+file INSTALL.  A tutorial is to be found in the file tutorial.html,
+and an exposition of the algorithms is in dbacl.ps. An alternative
+tutorial which is specialized for email classification is in the file
+email.html. All these files are in the doc directory, but should be
+installed automatically with the programs.
+
+LICENSE
+
+With the exceptions noted below, DBACL is distributed under the terms
+of the GNU General Public License (GPL) which can be found in the file
+COPYING. Some source files have free public licenses, by Bob Jenkins (hash
+functions) and Stephen L. Moshier (cephes functions).
+
+The sample text files are fair use quotes from various sources, and not
+covered by the GPL. To prevent statistical bias, the samples cannot be 
+marked directly with the author's name:
+- sample1.txt, sample3 and sampe5.txt are in the public domain, by Mark Twain.
+- sample2.txt, sample4.txt are in the public domain, by Aristotle.
+- sample6.txt is a forwarded email, copyright unknown.
+- japanese.txt is a Japanese translation of the GNU General Public License,
+  copyright by the Free Software Foundation.
+
+BUILDING
+
+There are several configuration options you can change in the file
+dbacl.h, if you want to increase the maximum number of categories or
+optimize hash table overhead.
+
+To build and install the program, you can execute the following steps
+from within the source DBACL directory:
+
+(note: you may have to replace make with gmake if you get errors)
+
+./configure
+make
+make check
+make install 
+
+The last part should be executed with superuser privileges for system
+wide installation. Alternatively
+
+./configure --prefix=/home/xyzzy
+make 
+make check
+make install
+
+builds and installs in user xyzzy's home directory, without the need for
+root privileges. In this case, the following environment variables 
+should be set permanently (e.g. in the file .profile):
+
+PATH=$PATH:/home/xyzzy/bin
+MANPATH=$MANPATH:/home/xyzzy/man
+
+INTERNATIONALIZATION
+
+dbacl uses the current locale for processing. 8-bit clean multibyte
+character sets (such as UTF-8) are supported in the default mode, and
+arbitrary multibyte character sets require the -i command line
+option. Note that your version of dbacl might not support international
+(wide) characters. This is checked for during compilation, see the 
+output of configure.
+
+The following remarks only apply to previous versions of dbacl.
+In version 1.8.1 and later, regexes are only available in multibyte
+code. This is to discard the added complexity of dealing with wide 
+character regexes - wide regexes will be reintroduced in the future,
+once a clean way of doing so is found.
+
+<section obsolete>
+If you intend to use the -i option together with regular
+expressions, you must build with a wide character POSIX regex library:
+ensure that the BOOST library is present on the system and type
+
+./configure WIDE_REGEX=1
+make 
+make install
+
+Warnings: 
+
+1) there is a large performance penalty if you build dbacl this way,
+which shows up whenever you use regular expressions. Only build this
+way if you need correct regular expressions in a multibyte environment
+which isn't 8-bit clean.
+</section obsolete>
+
+2) On some systems (e.g. BSD family), wide character functions are not
+supported. The configure script will detect this and disable full
+internationalization in this case. As a side effect, HTML entities
+won't be converted into characters, which breaks some regression tests
+when rinning make check. This is harmless.
+
+
+3) The mailinspect command uses the slang library for interactive
+mode.  If the headers cannot be found in /usr/include or
+/usr/include/slang, then compilation will skip interactive mode.
+
+OTHER DEPENDENCIES
+
+The main filter programs dbacl and bayesol have no special
+dependencies, and can always be compiled.
+
+mailinspect uses the readline and slang libraries for screen
+management in interactive mode. The configure script will check for
+these libraries and if it can't find them, mailinspect will be
+compiled without interactive support.
+
+mail{cross,toe,foot} are bash shell scripts which call awk and formail
+at various points. They will test for the existence of these programs
+in your path and refuse to run if it can't find them.
+
+The testsuite functionality is partially implemented by the above
+scripts, and partially by wrapper scripts for the various email
+classifiers used. It is imperative that the scripts follow the
+interface described in the mailcross.testsuite man page.
+
+RUNNING
+
+There is a tutorial which you can read with any web browser, point it to the
+file tutorial.html. For command line options and examples of possible use, 
+type after installation: 
+
+man dbacl
+man bayesol
+man mailcross
+man mailinspect
+man mailtoe
+man mailfoot
+
+You can also find a technical description of the algorithms and statistics
+in the postscript files dbacl.ps and costs.ps
+
+UPGRADING FROM PREVIOUS VERSIONS
+
+For simplicity, dbacl's category files are version coded. If you have
+categories created by a previous version, simply relearn them with the
+current version. Every time a category is relearned, the file is
+rewritten from scratch in the correct format.
+
+The mailcross.testsuite command from version 1.5 has been removed, but the 
+interface is unchanged. Any command which used to be of the form 
+"mailcross.testsuite xxx yyy" is now of the form "mailcross testsuite xxx yyy".
+
+TUTORIAL SAMPLES
+
+The tutorial.html document comes with several sample text files:
+
+- sample{1,3,5}.txt are extracts from Mark Twain, Huckleberry Finn
+- sample{2,4}.txt are extracts from Aristotle's Rhetoric.
+
+AUTHOR
+
+Laird A. Breyer <laird@lbreyer.com>

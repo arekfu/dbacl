@@ -1,0 +1,10 @@
+#!/bin/sh
+. ./share/dbacl/TREC/OPTIONS
+
+if [ -d "./check-$1" ]; then
+	rm -rf ./db
+	cp -fpr "./check-$1" ./db
+	exit 0
+fi
+echo "restart $1 command failed" >> ./stderr.log
+exit 1

@@ -1,0 +1,113 @@
+Message-ID: <04b201c245bd$787c4220$d3232fd1@corona>
+From: "James Lee" <jlee@canada.com>
+To: "Eric Sandeen" <sandeen@sgi.com>
+Subject: Re: kernel BUG at filemap.c:843!
+I did more testing with your patch on top of today's CVS, but the patch
+didn't help at all.
+The following is the results of the tests:
+Testing setup:
+1. created a "/dev/md0" with 4 scsi disks
+2. created a LVM Volume group "vg" with the "/dev/md0"
+3. created a LVM logical volume "vol1" with "vg"
+4. created a XFS fs with a command:
+ mkfs.xfs -f -d sunit=8,swidth=8 /dev/vg/vol1
+ -----------meta-data=/dev/vg/vol1 isize=256 agcount=8,
+agsize=32767 blks
+ -----------data = bsize=4096 blocks=262136,
+imaxpct=25
+ ----------- = sunit=1 swidth=1 blks,
+unwritten=0
+ -----------naming =version 2 bsize=4096
+ -----------log =internal log bsize=4096 blocks=1200,
+version=1
+ ----------- = sunit=1 blks
+ -----------realtime =none extsz=65536 blocks=0,
+rtextents=0
+Test results:
+1. mount with quota enabled => occasional kernel oops, attached the file
+oops1
+2. mount without quota enabled => occasional kernel oops, attached the file
+oops2
+3. mount without quota enabled, while md device is in degraded mode =>
+always kernel oops, attached the file oops3
+Thanks,
+JLee
+----- Original Message -----
+From: "Eric Sandeen" <sandeen@sgi.com>
+To: "James Lee" <jlee@canada.com>
+Cc: <linux-xfs@oss.sgi.com>; <ilmari@ping.uio.no>
+Sent: Tuesday, August 13, 2002 3:03 PM
+Subject: Re: kernel BUG at filemap.c:843!
+> Hi guys -
+>
+> We treat MD and LVM somewhat specially, and I wonder if in this case MD
+> is masking the fact that you're using LVM, and that might be where the
+> problem starts.
+>
+> Can you try this patch, which will cause LVM MD to be treated the
+> same, to see if it helps? It's probably not the final solution, but it
+> might offer some hints.
+>
+> Thanks,
+>
+> -Eric
+>
+> --- linux/fs/xfs/pagebuf/page_buf_locking.c_1.24 Tue Aug 13 14:05:18 2002
+> +++ linux/fs/xfs/pagebuf/page_buf_locking.c Tue Aug 13 13:59:37 2002
+> @@ -198,7 +196,7 @@
+> pagebuf_target_blocksize(target, PAGE_CACHE_SIZE);
+>
+> if ((MAJOR(dev) == MD_MAJOR) || (MAJOR(dev) == EVMS_MAJOR))
+> - target->pbr_flags = PBR_ALIGNED_ONLY;
+> + target->pbr_flags = PBR_SECTOR_ONLY;
+> else if (MAJOR(dev) == LVM_BLK_MAJOR)
+> target->pbr_flags = PBR_SECTOR_ONLY;
+> else
+>
+>
+>
+> On Mon, 2002-08-12 at 01:40, James Lee wrote:
+> > Hi,
+> >
+> > I'm also having the exactly same problem.
+> > Tested with 2.4.19-xfs(checked out from SGI's CVS on Aug 10) on Redhat
+7.2.
+> > Kernel and userland tools are compiled with gcc 2.91.66
+> > The following is the result of some tests:
+> >
+> > scsidisks -> xfs: OK
+> > scsidisks -> raid5 -> xfs: OK
+> > scsidisks -> lvm -> xfs: OK
+> > scsidisks -> raid0 -> lvm -> xfs: OK
+> > scsidisks -> raid1 -> lvm -> xfs: OK
+> > scsidisks -> raid5 -> lvm -> xfs: kernel BUG at filemap.c:843!
+> >
+> > This problem is always reproducible with the following shell script:
+> >
+> > #!/bin/sh
+> > mkraid /dev/md0
+> > vgcreate VolumeGroup /dev/md0
+> > lvcreate -L1G -nTestVolume VolumeGroup
+> > mkfs.xfs -f -d size=32m /dev/VolumeGroup/TestVolume
+> > mount -t xfs /dev/VolumeGroup/TestVolume
+> > /mnt -onoatime,nodiratime,usrquota,grpquota
+> >
+> > Whenever I run the above script, mount command always generates kernel
+oops.
+> > But, if I insert some delay as of the following, then mount goes well:
+>
+>
+> --
+> Eric Sandeen XFS for Linux http://oss.sgi.com/projects/xfs
+> sandeen@sgi.com SGI, Inc. 651-683-3102
+begin 666 oops1.dat
+`
+end
+begin 666 oops2.dat
+`
+end
+begin 666 oops3.dat
+`
+end
+
+

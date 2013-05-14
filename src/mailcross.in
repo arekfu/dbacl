@@ -1,0 +1,337 @@
+#!/bin/bash
+# 
+# Copyright (C) 2002 Laird Breyer
+#  
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA.
+# 
+# Author:   Laird Breyer <laird@lbreyer.com>
+#
+PROGNAME="$0"
+PROGNAME2=`basename $0`
+VERSION="$PROGNAME version @VERSION@\nCross validation simulator"
+MXDIR="$PWD/mailcross.d"
+ALOG="$MXDIR/log/activity.log"
+CLOG="$MXDIR/log/crossval.log"
+BLOG="$MXDIR/log/biplot.log"
+SLOG="$MXDIR/log/summary.log"
+TEMPDIR="$MXDIR/tmp"
+BOOTSTRAP="@PKGDATADIR@/testsuite"
+FILTERS="$MXDIR/filters"
+
+# use this for debugging
+# set -x
+
+usage() {
+    echo "
+Usage: 
+
+    $PROGNAME2 prepare size
+    $PROGNAME2 add category [MBOX]...
+    $PROGNAME2 learn
+    $PROGNAME2 run
+    $PROGNAME2 summarize [LEVEL]
+    $PROGNAME2 review TRUECAT PREDCAT
+    $PROGNAME2 biplot CAT1 CAT2
+    $PROGNAME2 clean
+    $PROGNAME2 killall
+
+    $PROGNAME2 testsuite select [FILTER]...
+    $PROGNAME2 testsuite deselect [FILTER]...
+    $PROGNAME2 testsuite list
+    $PROGNAME2 testsuite status
+    $PROGNAME2 testsuite run
+    $PROGNAME2 testsuite summarize
+"
+    exit 1
+}
+
+
+
+# begin mailtest.functions
+# end mailtest.functions
+
+# check this for environment variable overrrides
+[ -e $HOME/.mailcrossrc ] && . $HOME/.mailcrossrc
+
+# this is the default filter
+if [ -z "$MAILCROSS_FILTER" ]; then
+    MAILCROSS_FILTER="dbacl -v -m -T email"
+fi
+
+# this is the default scorer
+if [ -z "$MAILCROSS_SCORER" ]; then
+    MAILCROSS_SCORER="dbacl -T email -m -v -X"
+fi
+
+# this is the default learner
+if [ -z "$MAILCROSS_LEARNER" ]; then
+    MAILCROSS_LEARNER="dbacl -H 19 -T email -l"
+    MAILCROSS_CPREFIX="-c" # needed by dbacl
+fi
+
+export TEMPDIR
+# main switch statement - this processes commands
+case $1 in
+
+    '-V')
+	echo $VERSION
+	;;
+
+    clean) # delete working tree
+	clean_working_tree
+	;;
+
+    killall)
+	prerequisite_command "killall" "killall"
+	killall -9 -g mailcross
+	;;
+
+    prepare) # create directory tree
+	shift
+	prepare_working_tree "$@"
+	;;
+
+    add)
+	shift
+	CATNAME="$1"
+	if [ -z "$CATNAME" ]; then
+	    echo "error: missing category name."
+	    usage
+	fi
+
+	prerequisite_command "formail" "mailutils"
+	get_number_of_subsets
+
+	echo "=== $PROGNAME $*" >> $ALOG
+
+	shift
+	# either add files on command line or from stdin 
+	if [ -n "$*" ]; then
+	    cat "$@" | formail -s /bin/bash -c \
+		"cat >> $MXDIR/\$((\$RANDOM % $NUM))/$CATNAME.mbox"
+	else
+	    formail -s /bin/bash -c \
+		"cat >> $MXDIR/\$((\$RANDOM % $NUM))/$CATNAME.mbox"
+	fi
+	;;
+
+    learn) 
+	shift
+	get_number_of_subsets
+	NUM=`expr $NUM - 1` # we count from zero to NUM-1
+	get_categories
+	
+	prerequisite_command "seq" "shellutils"
+
+	echo "=== $PROGNAME learn $*" >> $ALOG
+
+	for n in $CATS; do
+
+	    echo "Learning `basename $n .mbox`" >> $ALOG
+
+	    for i in `seq 0 $NUM`; do
+
+		echo "| $MAILCROSS_LEARNER $MXDIR/$i/`basename $n .mbox` $*" >> $ALOG
+		for j in `seq 0 $NUM`; do 
+		    if [ "$i" != "$j" ]; then
+			echo "    cat $MXDIR/$j/$n |" >> $ALOG
+			cat "$MXDIR/$j/$n"
+		    fi
+		done | $MAILCROSS_LEARNER "$MXDIR/$i/`basename $n .mbox`" "$@"
+		
+	    done
+
+	done
+	;;
+
+    run) 
+	shift
+	get_number_of_subsets
+	NUM=`expr $NUM - 1` # we count from zero to NUM-1
+	get_categories
+	STUFF="$MXDIR/log/run.stuff"
+
+	prerequisite_command "formail" "mailutils"
+	prerequisite_command "sed" "sed"
+	prerequisite_command "seq" "shellutils"
+
+	echo "=== $PROGNAME run $*" >> $ALOG
+
+	
+	echo "# location | true | predicted | from" > $CLOG
+
+	for i in `seq 0 $NUM`; do
+
+	    ARGS=`for n in $CATS; do echo -n "$MAILCROSS_CPREFIX $MXDIR/$i/\`basename $n .mbox\` "; done` 
+	    COMMAND="$MAILCROSS_FILTER $ARGS"
+	    echo "| $COMMAND" >> $ALOG
+
+	    for m in $CATS; do
+		cat $MXDIR/$i/$m | formail -s /bin/bash -c \
+		    "sed -e 'h' -e '/^From /s/^From//w $STUFF' -e 'x' | $COMMAND | xargs echo -ne '$i `basename $m .mbox`' && cat $STUFF" >> $CLOG
+		echo "    cat $MXDIR/$i/$m |" >> $ALOG
+	    done
+
+	done
+	;;
+
+    summarize) 
+	shift
+	get_number_of_subsets # includes check that directory tree is present
+	get_categories
+
+	prerequisite_command "awk" "awk or equivalent"
+
+	echo "=== $PROGNAME summarize $*" >> $ALOG
+
+	if [ -s $CLOG ]; then
+	    cat $CLOG | summarize_log
+	else
+	    echo "Error: No results found. You must run the cross validation first."
+	    usage
+	fi
+	;;
+
+    review) 
+	shift
+	prerequisite_command "formail" "mailutils"
+	prerequisite_command "grep" "grep"
+
+	if [ -z "$1" -o -z "$2" ]; then
+	    echo "Error: Missing category, e.g. $PROGNAME review notspam spam"
+	else
+	    review_misclassified "$MXDIR/tmp/save_msg.sh" "$1" "$2"
+	fi
+	;;
+
+    biplot)
+	shift
+	get_number_of_subsets
+	NUM=`expr $NUM - 1` # we count from zero to NUM-1
+	if [ -z "$1" -o -z "$2" ]; then
+	    echo "Error: Needs two categories, e.g. $PROGNAME biplot spam notspam"
+	    usage
+	else
+	    CAT1=$1
+	    CAT2=$2
+	    CATS="$1 $2"
+
+	    prerequisite_command "formail" "mailutils"
+	    prerequisite_command "sed" "sed"
+	    prerequisite_command "seq" "shellutils"
+
+	    echo "=== $PROGNAME biplot $*" >> $ALOG
+	    echo "# location | true | cat1 ... | cat2 ..." > $BLOG
+
+	    for i in `seq 0 $NUM`; do
+
+		ARGS=`for n in $CATS; do echo -n "$MAILCROSS_CPREFIX $MXDIR/$i/$n "; done` 
+		COMMAND="$MAILCROSS_SCORER $ARGS"
+		echo "| $COMMAND" >> $ALOG
+
+		for m in $CATS; do
+		    cat $MXDIR/$i/$m.mbox | formail -s /bin/bash -c \
+			"$COMMAND | xargs echo -ne '$i $m' && echo" >> $BLOG
+		    echo "    cat $MXDIR/$i/$m |" >> $ALOG
+		done
+		
+		echo >> $BLOG
+
+	    done
+
+	    plot_biplot "$CAT1-$CAT2" $BLOG
+
+	fi
+	;;
+    testsuite)
+	shift
+	case $1 in
+	    list)
+		testsuite_list_wrappers
+		;;
+
+	    deselect)
+		testsuite_deselect_wrappers "$@"
+		;;
+
+	    select)
+		testsuite_select_wrappers "$@"
+		;;
+
+	    status)
+		echo -e "The following categories are ready to be cross validated:\n"
+		get_categories
+		for c in $CATS; do
+		    echo -n "$c - counting... "
+		    NUM=`grep '^From ' $MXDIR/*/$c | wc -l`
+		    echo "$NUM messages"
+		done
+
+		echo -e "\nThe following classifiers are ready to be cross validated:\n"
+		get_filters
+		for f in $FILTS; do
+		    echo "$f - `$FILTERS/$f describe`"
+		done
+		;;
+
+	    run)
+		get_filters
+		for f in $FILTS; do
+
+		    echo -ne "Now testing: "
+		    "$FILTERS/$f" describe
+
+		    echo "Cleanup."
+		    "$FILTERS/$f" clean "$MXDIR"
+
+		    export MAILCROSS_FILTER="$FILTERS/$f filter"
+		    export MAILCROSS_LEARNER="$FILTERS/$f learn"
+
+		    echo "Learning."
+		    time "$PROGNAME" learn
+
+		    echo "Running."
+		    time "$PROGNAME" run
+
+		    echo "Writing results."
+		    echo -e "\n---------------" >> "$SLOG"
+		    "$FILTERS/$f" describe >> "$SLOG"
+		    date >> "$CLOG"
+		    echo "---------------" >> "$SLOG"
+		    "$PROGNAME" summarize >> "$SLOG"
+
+		done
+		;;
+
+	    summarize) 
+		if [ -s "$SLOG" ]; then
+		    cat "$SLOG"
+		else
+		    echo "Error: No results found. You must run the testsuite first."
+		fi
+		;;
+
+	    *)
+		usage
+		;;
+	esac
+	;;
+
+    *) 
+	usage
+	;;
+esac
+
+exit 0

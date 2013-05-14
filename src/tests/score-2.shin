@@ -1,0 +1,55 @@
+#!/bin/sh
+# verify that average empirical divergence is correct.
+PATH=/bin:/usr/bin
+DBACL=$TESTBIN/dbacl
+
+prerequisite_command() {
+    type $2 2>&1 > /dev/null
+    if [ 0 -ne $? ]; then
+        echo "$1: $2 not found, test will be skipped"
+        exit 77
+    fi
+}
+
+prerequisite_command $0 formail
+prerequisite_command $0 grep
+prerequisite_command $0 awk
+prerequisite_command $0 tr
+
+DBACL_PATH="`pwd`/`basename $0 .sh`_`date +"%Y%m%dT%H%M%S"`"
+export DBACL_PATH
+
+mkdir "$DBACL_PATH"
+
+(cat ${sourcedir}/sample.spam-8 ; echo ; \
+ cat ${sourcedir}/sample.spam-9 ; echo ; \
+ cat ${sourcedir}/sample.spam-7 ; echo ; \
+ cat ${sourcedir}/sample.spam-3 ) \
+    > "$DBACL_PATH/mbox"
+
+cat "$DBACL_PATH/mbox" \
+    | $DBACL -l dummy -X -d -T email \
+    | grep '# alpha' \
+    | awk '{print $7/log(2)}' \
+    | tr '\n' ' ' \
+    > "$DBACL_PATH/out1"
+
+cat "$DBACL_PATH/mbox" \
+    | formail -s $DBACL -c dummy -vX \
+    | awk '{d += $3; e += $5} END{print (d/4), (e/4)}' \
+    | tr '\n' ' ' \
+    > "$DBACL_PATH/out2"
+
+echo "`cat \"$DBACL_PATH/out1\"` `cat \"$DBACL_PATH/out2\"`" \
+    | awk '
+function abs(x) { return (x >= 0) ? x : -x }
+{
+    # divergence error is within 15% of shannon entropy
+    # must invert exit value
+    exit !( abs($1 - $2) < (0.15/2.0) * ($3) ) 
+}'
+
+RESULT=$?
+rm -rf "$DBACL_PATH"
+
+exit $RESULT

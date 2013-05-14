@@ -1,0 +1,131 @@
+DBACL and TREC 2005
+
+This note explains how to use dbacl with the TREC 2005 Spam Filter
+Evaluation Toolkit (or spamjig for short). The spamjig is a system you
+can install to test and compare several spam filters with either
+public data or your own private data. It is/was developed as part of
+the NIST TREC 2005 conference. 
+
+The TREC Spam Filter Evalutation Toolkit can be downloaded from the
+following location:
+
+http://plg.uwaterloo.ca/~trlynam/spamjig/
+
+The spamjig has a similar purpose as dbacl's mailcross testsuite
+commands (see the man page for mailcross(1)), but uses a different
+methodology with a possibly different selection of open and closed
+source spam filters, and may be more up to date than the mailcross
+wrappers for some filters.
+
+This README file only covers the spamjig aspects directly related to
+dbacl, please refer to the spamjig's documentation for other
+installation and usage instructions.
+
+If you have downloaded dbacl as part of the spamjig, then you
+already have a self extracting archive, named something like this:
+
+dbacl-1.9.1.TREC.sfx.sh 
+
+In that case, you can skip the next section. Otherwise, you will have
+to create the file above from scratch, as explained below.
+
+PREPARING THE DBACL SELF-EXTRACTING SHELL SCRIPT
+
+The spamjig expects dbacl to come as a self-extracting shell script.
+To create this script from the normal dbacl-1.xxx.tar.gz is very easy.
+Suppose you have downloaded the file dbacl-1.9.1.tar.gz, then you
+simply type
+
+tar xfz dbacl-1.9.1.tar.gz
+cd dbacl-1.9.1
+./configure && make trec
+
+This will automatically create a self-extracting script named
+dbacl-1.9.1.TREC.sfx.sh and place it into the dbacl-1.9.1 directory.
+
+USING THE SELF-EXTRACTING SCRIPT WITH THE SPAMJIG
+
+To use the spamjig with a self extracting archive, first create
+a directory where you would like to run the spamjig test. Normally,
+this is a subdirectory of the spamjig working directory itself.
+
+Next, you should copy the file dbacl-1.xxx.TREC.sfx.sh into your
+chosen working directory, and type from within that directory
+
+./dbacl-1.xxx.TREC.sfx.sh
+
+You will obtain a list of instructions as well as a set of possible
+optional parameters. Follow these instructions to create (in the 
+current working directory) all the necessary programs and scripts.
+If something goes wrong, it should be printed on your terminal, so
+please read the messages.
+
+Upon success, you will have several scripts named initialize,
+classify, train, finalize, in the same directory containing the
+self extracting archive. These scripts are used by the spamjig,
+consult the spamjig documentation for details.
+
+Note: The self extracting archive checks for a local file named 
+OPTIONS.default. If this file is found in the current directory,
+then you will not see instructions, but instead all the test jig
+files will be extracted directly. 
+
+DBACL VARIANTS
+
+The dbacl program has several switches and options which can result in
+different classification performance. The spamjig scripts supplied
+with dbacl are designed to allow you to experiment with different
+settings if you like.
+
+The switches and settings used for a simulation are defined in a 
+file called OPTIONS which exists in the share/dbacl/TREC subdirectory,
+ie the same directory containing this README file. This file is 
+recreated every time initialize is called, so you cannot make changes
+to it.
+
+To change the simulation options, you have two choices: you can either select
+a predefined OPTIONS file among the variants which are bundled with dbacl, or
+you can write your own. 
+
+PREDEFINED VARIANTS
+
+The initialize script accepts the name of an OPTIONS file on the command line, eg
+
+initialize OPTIONS.simple
+
+Here OPTIONS.simple is one among the OPTIONS.* files which are found in the 
+dbacl-xxx/TREC/ source directory, where the program was compiled.
+
+Possible options are more or less as follows:
+
+OPTIONS.simple-d				
+OPTIONS.simple-v
+OPTIONS.adp-unif-d
+OPTIONS.cef-unif-d
+OPTIONS.adp-dir-d
+OPTIONS.cef-dir-d
+OPTIONS.bi-adp-unif-d
+
+Remember that initialize will recreate the share/dbacl/TREC/OPTIONS file by
+overwriting it with one of the above.
+
+Each OPTIONS.* file is a text file and contains descriptions of the 
+algorithmic choices it mandates and other relevant information.
+
+For the actual TREC conference, a specially named set of OPTIONS.* files
+exist, but dbacl is packaged with several others for your convenience.
+
+CUSTOM VARIANTS
+
+You can also create your own OPTIONS.xxx file if the predefined variants are
+not to your liking. To do so, simply create a file named OPTIONS.custom
+and place it in the same directory which contains the self extracting archive
+(ie where also the initialize script is created). Then you can type
+
+initialize OPTIONS.custom
+
+and the initialize script will look for the file OPTIONS.custom first among its
+predefined variants, and then in the current working directory if not found.
+The OPTIONS.custom file will overwrite the share/dbacl/TREC/OPTIONS file, and
+the simulation will use your custom settings. 
+

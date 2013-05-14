@@ -1,0 +1,2 @@
+dbacl:warning: could not mmap ./db/ham, trying stdio.
+dbacl:warning: could not mmap ./db/spam, trying stdio.

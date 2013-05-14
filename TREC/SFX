@@ -1,0 +1,161 @@
+#!/bin/sh
+
+# This is a self extracting archive designed for the TREC 2005 spam
+# filtering track. It deletes several directories and files in the current 
+# working dir, which will then be replaced.
+#
+# We construct the archive by cat SFX dbacl-xxx.tar.gz > dbacl-xxx.sfx
+#
+# This script accepts one optional command line argument. If present,
+# we check whether a corresponding file named OPTIONS.zzz is present
+# in the TREC subdirectory, where zzz is the argument value. This
+# file is used to overwrite the OPTIONS file containing the switches
+# for the simulation. In this way, we can self-install several
+# variations of the classifier.
+#
+# If no options are given, we use OPTIONS.default if it exists in the 
+# current working directory. Each time a command line option is presented,
+# the OPTIONS.default file is (re)created automatically from that argument.
+#
+# If no options are give, and no OPTIONS.default exists in the current
+# working directory, then we present a help message and a list of 
+# possible OPTIONS.
+#
+#
+
+NAME=`basename $0 .TREC.sfx.sh`
+W=$PWD
+SKIP=`grep -a -n -m 1 '^__ARCHIVE_FOLLOWS__' $0 | sed 's/:.*//'`
+
+function usage() {
+	echo "Usage: $0 [XXX]"
+	echo ""
+	echo "Welcome to the dbacl TREC/spam evaluation package."
+	echo "This script unpacks automatically into the current directory"
+	echo "a fresh copy of all the files and programs expected by the"
+	echo "TREC 2005 spamjig (spam filter evaluation system), such as the"
+	echo "initialize script."
+	echo ""
+	echo "If you are seeing this message, then you have yet to select"
+	echo "which algorithms and runtime options are to be tested in this"
+	echo "instance of the spamjig test run. All you have to do is rerun"
+	echo "the present script with the appropriate value of XXX chosen"
+	echo "from the list below. This will copy a file named OPTIONS.default"
+	echo "into the current directory which will lock your chosen options"
+	echo "for all required scripts."
+	echo ""
+	echo "You can change options later by rerunning this script with"
+	echo "another value of XXX, or even edit the OPTIONS.default file"
+	echo "directly if you know what you are doing."
+	echo ""
+	echo "Possible values for XXX:"
+
+	tail -n +`expr $SKIP + 1` $0 | gunzip -c | tar t | grep 'TREC/OPTIONS.' | sed 's/^.*OPTIONS.//'
+
+}
+
+function warn_fs {
+    echo "################################################################"
+    echo "# A ramdisk speeds up simulation and protects your disks.      #"
+    echo "# If you haven't done so already, use a ramdisk!               #"
+    echo "# % mkdir /path/to/ramdisk                                     #"
+    echo "# % mount tmpfs /path/to/ramdisk -t tmpfs -o size=150m         #"
+    echo "# % cp OPTTIONS.default dbacl-xxx.TREC.sfx.sh /path/to/ramdisk #"
+    echo "# % cd /path/to/ramdisk                                        #"
+    echo "# % ./dbacl-xxx.TREC.sfx.sh                                    #"
+    echo "# (run simulation, copy results file away from ramdisk)        #"
+    echo "# % umount /path/to/ramdisk                                    #"
+    echo "################################################################"
+    echo "Press Ctrl-C to abort, or Enter to proceed."
+    read
+}
+
+
+OPTARG=$1
+if [ -z $OPTARG ]; then
+	OPTARG=default
+	if [ ! -e "$W/OPTIONS.$OPTARG" ]; then
+		usage
+		exit 1
+	fi
+fi
+
+echo ""
+echo "Installing $NAME - please wait...."
+echo ""
+
+warn_fs
+
+rm -rf "$W/$NAME"
+tail -n +`expr $SKIP + 1` $0 | gunzip -c | tar x
+
+if [ -d "$W/$NAME" ]; then
+	if [ -n $OPTARG ]; then
+		if [ -e "$W/$NAME/TREC/OPTIONS.$OPTARG" ]; then
+			cat "$W/$NAME/TREC/OPTIONS.$OPTARG" > "$W/$NAME/TREC/OPTIONS"
+			cp -f "$W/$NAME/TREC/OPTIONS.$OPTARG"  "$W/OPTIONS.default"
+		else
+			echo "No OPTIONS.$OPTARG in $W/$NAME/TREC, trying working directory..."
+			if [ -e "$W/OPTIONS.$OPTARG" ]; then
+			    echo "Found $W/OPTIONS.$OPTARG."
+			    cat "$W/OPTIONS.$OPTARG" > "$W/$NAME/TREC/OPTIONS"
+			else
+			    echo "Could not find $W/OPTIONS.$OPTARG, using defaults."
+			fi
+			
+		fi
+	fi
+
+	echo "Installing these options:"
+	echo "---------"
+	cat $W/$NAME/TREC/OPTIONS
+	echo "---------"
+
+	cd "$W/$NAME"
+	./configure "--prefix=$W" && make && make check && make install
+	if [ -x "$W/bin/dbacl" ]; then
+
+	    for f in initialize finalize classify train checkpoint restart; do
+		rm -f "$W/$f" && cp "$W/share/dbacl/TREC/$f" "$W/$f"
+		chmod u+x "$W/$f"
+	    done
+
+	else
+	    echo "Installation did NOT complete successfully."
+	    exit 1
+	fi
+
+	cd "$W"
+	rm -rf "$W/db" && mkdir "$W/db"
+	rm -f "$W/stderr.log"
+
+	. $W/share/dbacl/TREC/OPTIONS
+
+	rm -rf "$W/audit" && mkdir "$W/audit"
+	if [ -f "$W/share/dbacl/TREC/$AUDITCOMMAND" ]; then
+	    cp "$W/share/dbacl/TREC/$AUDITCOMMAND" "$W/$AUDITCOMMAND"
+	    chmod u+x "$W/$AUDITCOMMAND"
+	    "$W/$AUDITCOMMAND" initialize "$W"
+	fi
+
+	"$W/train" ham "$W/share/dbacl/TREC/basic-email"
+	"$W/train" spam "$W/share/dbacl/TREC/basic-email"
+
+	if ! cmp -s "$W/stderr.log" "$W/share/dbacl/TREC/verify-stderr" ; then
+	    echo "Basic learning failed. See stderr.log below:"
+	    echo "---"
+	    cat "$W/stderr.log"
+	    exit 1
+	fi
+
+else
+	echo "There was a problem while extracting the archive."
+	exit 1
+fi
+
+echo "Done!"
+
+exit 0
+
+# no extra characters allowed after this line!
+__ARCHIVE_FOLLOWS__

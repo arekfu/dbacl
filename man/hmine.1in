@@ -1,0 +1,65 @@
+\" t
+.TH HMINE 1 "Bayesian Classification Tools" "Version @VERSION@" ""
+.SH NAME
+hmine \- a mail message header analyzer.
+.SH SYNOPSIS
+.HP
+.B hmine
+[-vDa]
+[FILE]
+.HP
+.B hmine
+-V
+.SH DESCRIPTION
+.PP
+.B hmine
+reads a mail message from FILE or STDIN and outputs a variety of
+information found in the message headers. The message is expected
+in Internet mail format (RFC 821,822,2821,2822 or variations thereof). The body is not inspected.
+.SH EXIT STATUS
+On success, 
+.B hmine
+returns 1. In case of a problem, 
+.B hmine
+returns zero.
+.SH OPTIONS
+.IP -a
+Print mailboxes and groups found in various header fields, one per line, preceded by the field name. Actual email addresses are always enclosed in '<' and '>' for easy parsing, ie anything
+not within these delimiters is not part of an email address. Beware that not every line 
+need contain an email address.
+.IP -D
+Debug output.
+.IP -V
+Print the program version number and exit. 
+.SH USAGE
+.PP
+An invocation looks like this:
+.PP
+.na
+% hmine email.txt
+.ad
+.SH SOURCE
+.PP
+The source code for the latest version of this program is available at the
+following locations: 
+.PP
+.na
+http://www.lbreyer.com/gpl.html
+.br
+http://dbacl.sourceforge.net
+.ad
+.SH BUGS
+.PP
+At present, hmine parses messages but doesn't output anything useful.
+.SH AUTHOR
+.PP
+Laird A. Breyer <laird@lbreyer.com>
+.SH SEE ALSO
+.PP
+.BR dbacl (1), 
+.BR mailcross (1),
+.BR mailfoot (1),
+.BR mailinspect (1),
+.BR mailtoe (1),
+.BR regex (7)
+

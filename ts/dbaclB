@@ -1,0 +1,139 @@
+#!/bin/bash
+# 
+# Copyright (C) 2002 Laird Breyer
+#  
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+# 
+# Author:   Laird Breyer <laird@lbreyer.com>
+#
+# IMPLEMENTATION NOTES
+#
+# This script follows the mailcross testsuite interface
+# requirements. Type man mailcross for details.
+#
+# The script accepts one of more commands on the command line,
+# and may read STDIN and write STDOUT as follows:
+#
+# If $1 == "filter":
+# In this case, a single email is expected on STDIN,
+# and a list of category filenames is expected in $2, $3, etc.
+# The script writes the category name corresponding to the 
+# input email on STDOUT.
+#
+# If $1 == "learn":
+# In this case, a standard mbox stream is expected on STDIN,
+# while a suitable category file name is expected in $2. No output
+# is written to STDOUT.
+#
+# If $1 == "clean":
+# In this case, a directory is expected in $2, which is examined
+# for old database information. If any old databases are found, they
+# are purged or reset. No output is written to STDOUT.
+#
+# If $1 == "describe":
+# In this case, STDIN and the command line are ignored. A single
+# line is written on STDOUT, describing the filter functionality.
+#
+# If $1 == "bootstrap":
+# In this case, the current script is copied to the directory $2,
+# provided the classifier we're wrapping exists on the system.
+#
+# If $1 == "toe":
+# In this case, a single email is expected on STDIN,
+# and a list of category filenames is expected in $2, $3, etc.
+# The category name in $2 represents the "true" category, and $3 $4 etc
+# are a complete list of possible categories.
+# The script writes the classified category name corresponding to the 
+# input email on STDOUT, and if this differs from the true category $2,
+# then, and only then, the email is learned.
+#
+# If $1 == "foot":
+# Like "toe", but the input email is always learned.
+#
+
+DBACL="dbacl -j -q 2 -T email -e cef -T email:headers -T html:links -T html:alt"
+[ -z "$TEMPDIR" ] && TEMPDIR=/tmp
+
+case "$1" in
+
+    filter)
+	shift
+	$DBACL -m -v `for f in "$@"; do echo -n "-c $f " ; done`
+	;;
+
+    learn)
+	shift
+	$DBACL -m -h 17 -H 19 -l $@
+	;;
+
+    clean)
+	shift
+	find "$1" -name "*.mbox" -print | sed 's/.mbox$//' | xargs rm -f
+	find "$1" -name "*.toe" -exec rm -f {} \;
+	find "$1" -name "*.foot" -exec rm -f {} \;
+	find "$1" -name "*.tmp" -exec rm -f {} \;
+	find "$1" -name "*.onl" -exec rm -f {} \;
+	;;
+
+    describe)
+	VER="(unavailable?)"
+	if [ -n "`which dbacl`" ] ; then
+	    VER=`dbacl -V | head -1 | sed 's/.*version //'`
+	fi
+	echo "dbacl $VER with cef,headers,alt,links"
+	;;
+
+    bootstrap)
+	if [ -d "$2" ] ; then
+            if [ -n "`which dbacl`" ] ; then
+		echo "selecting $0"
+		cp "$0" "$2"
+	    else
+		echo "dbacl appears to be missing"
+            fi
+	else
+	    echo "bad target directory $2"
+	fi
+	;;
+
+    toe)
+	shift
+	TRUECAT="$1"
+	shift
+	CATS=`for f in "$@"; do echo -n "-c $f " ; done`
+	cat > "$TEMPDIR/mailtoe.tmp"
+	VERDICT=`cat $TEMPDIR/mailtoe.tmp | $DBACL -m -v $CATS`
+	if [ "x$VERDICT" != "x`basename $TRUECAT`" ] ; then
+	    #cat "$TEMPDIR/mailtoe.tmp" >> $TRUECAT.toe
+	    #cat $TRUECAT.toe | $DBACL -m -h 17 -H 19 -l $TRUECAT
+	    cat "$TEMPDIR/mailtoe.tmp" | $DBACL -m -h 17 -H 19 -l $TRUECAT -o $TRUECAT.onl
+	fi
+	echo -ne "$VERDICT"
+	;;
+
+    foot)
+	shift
+	TRUECAT="$1"
+	shift
+	CATS=`for f in "$@"; do echo -n "-c $f " ; done`
+	cat > "$TEMPDIR/mailfoot.tmp"
+	VERDICT=`cat "$TEMPDIR/mailfoot.tmp" | $DBACL -m -v $CATS`
+	cat "$TEMPDIR/mailfoot.tmp" | $DBACL -m -h 17 -H 19 -l $TRUECAT -o $TRUECAT.onl
+	#cat "$TEMPDIR/mailfoot.tmp" >> "$TRUECAT.foot"
+	#cat "$TRUECAT.foot" | $DBACL -m -h 17 -H 19 -l $TRUECAT
+	echo -ne "$VERDICT"
+	;;
+
+esac

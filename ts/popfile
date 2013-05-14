@@ -1,0 +1,327 @@
+#!/bin/bash
+#
+# Copyright (C) 2002 Laird Breyer
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+#
+# Author:   Laird Breyer <laird@lbreyer.com>
+#
+# IMPLEMENTATION NOTES
+#
+# This script follows the mailcross testsuite interface
+# requirements. Type man mailcross for details.
+#
+# The script accepts one of more commands on the command line,
+# and may read STDIN and write STDOUT as follows:
+#
+# If $1 == "filter":
+# In this case, a single email is expected on STDIN,
+# and a list of category filenames is expected in $2, $3, etc.
+# The script writes the category name corresponding to the 
+# input email on STDOUT.
+#
+# If $1 == "learn":
+# In this case, a standard mbox stream is expected on STDIN,
+# while a suitable category file name is expected in $2. No output
+# is written to STDOUT.
+#
+# If $1 == "clean":
+# In this case, a directory is expected in $2, which is examined
+# for old database information. If any old databases are found, they
+# are purged or reset. No output is written to STDOUT.
+#
+# If $1 == "describe":
+# In this case, STDIN and the command line are ignored. A single
+# line is written on STDOUT, describing the filter functionality.
+#
+# If $1 == "bootstrap":
+# In this case, the current script is copied to the directory $2,
+# provided the classifier we're wrapping exists on the system.
+#
+
+# The POPFile API code is a quick and dirty adaptation of insert.pl
+# I have no idea how this really works, and I wouldn't call it robust.
+# It's been tested on popfile 0.20.1 and may not work on any other version.
+# It seems that the corpus directory is always created in the current working
+# directory. That's not thrilling, but we can make do.
+
+# We call the API code directly instead of using the insert.pl and bayes.pl 
+# scripts. This is necessary because those scripts don't create buckets, and
+# assume a single usual corpus location. For our tests, we need lots of 
+# different corpus locations.
+
+# this variable is modified by bootstrap
+POPDIR=""
+[ -z "$TEMPDIR" ] && TEMPDIR=/tmp
+
+case "$1" in
+    filter)
+        shift
+	export BOOKAY=`basename $1`
+	export DBPATH=`dirname $1`
+	if [ -n "$POPDIR" ] ; then
+	    cd "$DBPATH"
+	    cat > mailcross.tmp
+	    # assume POPDIR is filled (done by bootstrap)
+	    # also, we assume that the buckets on the command line are 
+	    # the only ones in the current corpus
+	    perl -I"$POPDIR" -e '
+use strict;
+use locale;
+use Classifier::Bayes;
+use POPFile::Configuration;
+use POPFile::MQ;
+
+my $c = new POPFile::Configuration;
+my $mq = new POPFile::MQ;
+my $b = new Classifier::Bayes;
+
+$c->configuration( $c );
+$c->mq( $mq );
+
+$mq->configuration( $c );
+$mq->mq( $mq );
+
+$b->configuration( $c );
+$b->mq( $mq );
+
+$b->initialize();
+
+$c->load_configuration();
+
+$b->start();
+
+print $b->classify("mailcross.tmp");
+
+$b->stop();
+$mq->stop();
+$c->stop();
+'
+	    cd -
+	fi
+        ;;
+    learn)
+        shift
+	export BOOKAY=`basename $1`
+	export DBPATH=`dirname $1`
+	
+	if [ -n "$POPDIR" ] ; then
+	    # assume POPDIR is filled (done by bootstrap)
+	    cd "$DBPATH"
+	    perl -I"$POPDIR" -e '
+use strict;
+use locale;
+use Classifier::Bayes;
+use POPFile::Configuration;
+use POPFile::MQ;
+
+my $c = new POPFile::Configuration;
+my $mq = new POPFile::MQ;
+my $b = new Classifier::Bayes;
+
+$c->configuration( $c );
+$c->mq( $mq );
+
+$mq->configuration( $c );
+$mq->mq( $mq );
+
+$b->configuration( $c );
+$b->mq( $mq );
+
+$b->initialize();
+
+$c->load_configuration();
+
+$b->start();
+
+$b->create_bucket($ENV{"BOOKAY"});
+$b->clear_bucket($ENV{"BOOKAY"});
+
+open(TMPFILE, ">mailcross.tmp") || die;
+while(<STDIN>) {
+    if( /^From / ) {
+	close(TMPFILE);
+
+	$b->add_message_to_bucket($ENV{"BOOKAY"}, "mailcross.tmp");
+
+	open(TMPFILE, ">mailcross.tmp") || die;
+    }
+    print TMPFILE $_;
+}
+close(TMPFILE);
+$b->add_message_to_bucket($ENV{"BOOKAY"}, "mailcross.tmp");
+
+$b->stop();
+$mq->stop();
+$c->stop();
+'
+	    cd -
+	fi
+        ;;
+    clean)
+        shift
+	find "$1" -name "table.db" -exec rm -f {} \;
+	find "$1" -name "params" -exec rm -f {} \;
+        ;;
+    describe)
+        VER="(unavailable?)"
+	# we look for the popfile.pl script (not executable, can't use which)
+	OLDIFS=$IFS
+	IFS=:
+	for d in `echo "$PATH:/usr/share/popfile:$HOME/popfile:."` ; do 
+	    if [ -f "$d/popfile.pl" ] ; then
+	    POPDIR=$d
+	    fi
+	done
+	IFS=$OLDIFS
+
+	if [ -n "$POPDIR" -a -n "`which perl`" ] ; then
+	    VER=`cat $POPDIR/popfile.pl | grep CORE_version | sed -e 's/^.*(//' -e 's/).*$//' -e 's/, /./g'`
+	fi
+        echo "POPFile $VER with default options"
+        ;;
+    bootstrap)
+        if [ -d "$2" ] ; then
+	    # we look for the popfile.pl script (not executable, can't use which)
+	    OLDIFS=$IFS
+	    IFS=:
+	    for d in `echo "$PATH:$HOME/popfile"` ; do 
+		if [ -f "$d/popfile.pl" ] ; then
+		    POPDIR=$d
+		fi
+	    done
+	    IFS=$OLDIFS
+
+            if [ -n "$POPDIR" -a -n "`which perl`" ] ; then
+                echo "selecting $0"
+		cat "$0" | sed -e "s|POPDIR=\"\"|POPDIR=\"$POPDIR\"|" > "$2"/`basename $0`
+		chmod +x "$2"/`basename $0`
+            else
+                echo "POPFile appears to be missing"
+            fi
+        else
+            echo "bad target directory $2"
+        fi
+        ;;
+
+    toe)
+	shift
+	TRUECAT="$1"
+	export HYACINTH=`basename $1`
+	export DBPATH=`dirname $1`
+	shift
+	cat > "$TEMPDIR/mailtoe.tmp"
+        shift
+
+	if [ -n "$POPDIR" ] ; then
+	    cd "$DBPATH"
+	    # assume POPDIR is filled (done by bootstrap)
+	    # also, we assume that the buckets on the command line are 
+	    # the only ones in the current corpus
+	    perl -I"$POPDIR" -e '
+use strict;
+use locale;
+use Classifier::Bayes;
+use POPFile::Configuration;
+use POPFile::MQ;
+
+my $c = new POPFile::Configuration;
+my $mq = new POPFile::MQ;
+my $b = new Classifier::Bayes;
+
+$c->configuration( $c );
+$c->mq( $mq );
+
+$mq->configuration( $c );
+$mq->mq( $mq );
+
+$b->configuration( $c );
+$b->mq( $mq );
+
+$b->initialize();
+
+$c->load_configuration();
+
+$b->start();
+
+my $bookay = $b->classify($ENV{"TEMPDIR"}."/mailtoe.tmp");
+if( $bookay ne $ENV{"HYACINTH"} ) {
+    $b->add_message_to_bucket($ENV{"HYACINTH"}, $ENV{"TEMPDIR"}."/mailtoe.tmp");
+}
+
+print $bookay;
+
+$b->stop();
+$mq->stop();
+$c->stop();
+'
+	    cd -
+	fi
+	;;
+
+    foot)
+	shift
+	TRUECAT="$1"
+	export HYACINTH=`basename $1`
+	export DBPATH=`dirname $1`
+	shift
+	cat > "$TEMPDIR/mailtoe.tmp"
+        shift
+
+	if [ -n "$POPDIR" ] ; then
+	    cd "$DBPATH"
+	    # assume POPDIR is filled (done by bootstrap)
+	    # also, we assume that the buckets on the command line are 
+	    # the only ones in the current corpus
+	    perl -I"$POPDIR" -e '
+use strict;
+use locale;
+use Classifier::Bayes;
+use POPFile::Configuration;
+use POPFile::MQ;
+
+my $c = new POPFile::Configuration;
+my $mq = new POPFile::MQ;
+my $b = new Classifier::Bayes;
+
+$c->configuration( $c );
+$c->mq( $mq );
+
+$mq->configuration( $c );
+$mq->mq( $mq );
+
+$b->configuration( $c );
+$b->mq( $mq );
+
+$b->initialize();
+
+$c->load_configuration();
+
+$b->start();
+
+my $bookay = $b->classify($ENV{"TEMPDIR"}."/mailtoe.tmp");
+$b->add_message_to_bucket($ENV{"HYACINTH"}, $ENV{"TEMPDIR"}."/mailtoe.tmp");
+
+print $bookay;
+
+$b->stop();
+$mq->stop();
+$c->stop();
+'
+	    cd -
+	fi
+	;;
+
+esac

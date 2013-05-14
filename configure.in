@@ -1,0 +1,102 @@
+AC_PREREQ(2.59)
+AC_INIT([dbacl],[1.14.1],[laird@lbreyer.com])
+AC_CONFIG_AUX_DIR(config)
+AC_CANONICAL_SYSTEM
+AC_GNU_SOURCE
+AM_INIT_AUTOMAKE([dbacl],[1.14.1],[laird@lbreyer.com])
+AM_CONFIG_HEADER(src/config.h)
+
+## Checks for host information.
+AC_AIX
+AC_MINIX
+
+AC_SUBST(CFLAGSIEEE,[""])
+case $host in
+	alpha*-linux*)
+		AC_DEFINE([OS_LINUX],[],[this is a Linux system])
+		AC_MSG_NOTICE([using -mieee compilation flag to allow divide by zero.])	
+		AC_SUBST(CFLAGSIEEE,["-mieee"])
+		;;
+	*-*-linux*)
+		AC_DEFINE([OS_LINUX],[],[this is a Linux system])
+		;;
+	*-*-sunos*)
+		AC_DEFINE([OS_SUN],[],[this is a Sun system])
+		;;
+	*-*-solaris*)
+		AC_DEFINE([OS_SUN],[],[this is a Sun system])
+		;;
+	*-*-darwin*)
+		AC_DEFINE([OS_DARWIN],[],[this is a Mac system])
+		;;
+	*-*-hpux*)
+		AC_DEFINE([OS_HPUX],[],[this is an HP-UX system])
+		;;
+	*-*-*)
+		AC_DEFINE([OS_UNKNOWN],[],[this is an unrecognized system])
+		;;
+esac
+
+AC_DEFINE_UNQUOTED([TARGETCPU],"$target",[identify processor if categories not portable])
+
+## Checks for programs
+AC_PROG_CC
+AC_PROG_INSTALL
+AM_PROG_LEX
+AC_PROG_YACC
+
+## Checks for libraries.
+AC_CHECK_LIB([m],[log])
+
+
+AC_SUBST(LDADDINTER,[""])
+AC_SUBST(INCLUDESINTER,[""])
+# Decide if mailinspect will be interactive
+AC_CHECK_LIB([ncurses],[initscr],
+[
+	AC_CHECK_LIB([readline],[readline],
+	[
+		AC_CHECK_LIB([slang],[SLsmg_init_smg],
+		[
+			AC_SUBST(LDADDINTER,["-lslang -lreadline -lncurses"])
+			AC_SUBST(INCLUDESINTER,["-I/usr/include/slang"])
+			AC_DEFINE([HAVE_LIBNCURSES], [], [ncurses needed for readline])
+			AC_DEFINE([HAVE_LIBSLANG], [], [slang needed for interactive mailinspect])
+			AC_DEFINE([HAVE_LIBREADLINE], [], [readline needed for interactive mailinspect])
+		],[AC_MSG_WARN([libslang missing, disabling interactive mailinspect])])
+	],[AC_MSG_WARN([libreadline missing, disabling interactive mailinspect])])
+],[AC_MSG_WARN([libncurses missing (needed by readline), disabling interactive mailinspect])])
+
+## Checks for header files.
+AC_HEADER_STDC
+AC_CHECK_HEADERS([features.h langinfo.h unistd.h sys/mman.h mman.h netinet/in.h])
+AC_CHECK_HEADERS([wchar.h wctype.h],,
+[
+	AC_MSG_WARN([No wide character headers, disabling full internationalization.])
+])
+
+## Checks for typedefs, structures, and compiler characteristics.
+AC_C_CONST
+AC_TYPE_SIZE_T
+
+## Checks for library functions.
+AC_FUNC_MBRTOWC
+AC_FUNC_MMAP
+AC_FUNC_VPRINTF
+AC_FUNC_SETVBUF_REVERSED
+AC_CHECK_FUNCS([getpagesize madvise sigaction])
+## the AX_FUNC_POSIX_MEMALIGN was downloaded from the AC archive, 
+## http://ac-archive.sourceforge.net/doc/acinclude.html and added
+## to the acinclude.m4 file. After aclocal was run, it got put into aclocal.m4
+AX_FUNC_POSIX_MEMALIGN
+if test x$ac_cv_func_posix_memalign_works = xno; then
+	AC_CHECK_FUNCS([memalign valloc],[break])
+fi
+AC_CHECK_FUNCS([wcstol],,
+[
+	AC_MSG_WARN([Incomplete Unicode implementation, some HTML conversions may suffer.])
+])
+
+
+AC_CONFIG_FILES([Makefile doc/Makefile src/Makefile src/tests/Makefile man/Makefile ts/Makefile TREC/Makefile contrib/Makefile doc/chess/Makefile])
+AC_OUTPUT

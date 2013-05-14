@@ -1,0 +1,143 @@
+#!/bin/bash
+# 
+# Copyright (C) 2002 Laird Breyer
+#  
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+# 
+# Author:   Laird Breyer <laird@lbreyer.com>
+#
+# IMPLEMENTATION NOTES
+#
+# This script follows the mailcross testsuite interface
+# requirements. Type man mailcross for details.
+#
+# The script accepts one of more commands on the command line,
+# and may read STDIN and write STDOUT as follows:
+#
+# If $1 == "filter":
+# In this case, a single email is expected on STDIN,
+# and a list of category filenames is expected in $2, $3, etc.
+# The script writes the category name corresponding to the 
+# input email on STDOUT.
+#
+# If $1 == "learn":
+# In this case, a standard mbox stream is expected on STDIN,
+# while a suitable category file name is expected in $2. No output
+# is written to STDOUT.
+#
+# If $1 == "clean":
+# In this case, a directory is expected in $2, which is examined
+# for old database information. If any old databases are found, they
+# are purged or reset. No output is written to STDOUT.
+#
+# If $1 == "describe":
+# In this case, STDIN and the command line are ignored. A single
+# line is written on STDOUT, describing the filter functionality.
+#
+# If $1 == "bootstrap":
+# In this case, the current script is copied to the directory $2,
+# provided the classifier we're wrapping exists on the system.
+#
+
+AS="antispam"
+[ -z "$TEMPDIR" ] && TEMPDIR=/tmp
+
+case "$1" in
+    filter)
+	shift
+	CATEGORY=`basename $1`
+	DBPATH=`dirname $1`
+	$AS -d "${DBPATH}/antispam.db" -f
+	if [ "$?" = "0" ]; then
+	    echo "notspam"
+	else
+	    echo "spam"
+	fi
+	;;
+    learn)
+	shift
+	CATEGORY=`basename $1`
+	DBPATH=`dirname $1`
+	if [ ! -e "${DBPATH}/antispam.db" ]; then
+	    $AS -i -d "${DBPATH}/antispam.db"
+	fi
+	cat > "${TEMPDIR}/mbox.tmp"
+	head -3 "${TEMPDIR}/mbox.tmp"
+	if [ "$CATEGORY" = "spam" ]; then
+	    $AS -l -d "${DBPATH}/antispam.db" -b "${TEMPDIR}/mbox.tmp"
+	else
+	    $AS -l -d "${DBPATH}/antispam.db" -g "${TEMPDIR}/mbox.tmp"
+	fi
+	rm -f "${TEMPDIR}/mbox.tmp"
+	;;
+    clean)
+	shift
+	find "$1" -name "antispam.db" -exec rm {} \;
+	find "$1" -name "*.tmp" -exec rm {} \;
+	;;
+    describe)
+	VER="(unavailable?)"
+	if [ -n "`which $AS`" ] ; then
+	    VER=`$AS -V`
+	fi
+	echo "AntiSpam $VER with default options"
+	;;
+    bootstrap)
+	if [ -d "$2" ] ; then
+            if [ -n "`which $AS`" ] ; then
+		echo "selecting $0"
+		cp "$0" "$2"
+		echo -e "\tantispam is hard-coded for use only with exactly"
+		echo -e "\ttwo categories named 'spam' and 'notspam'."
+	    else
+		echo "antispam appears to be missing"
+            fi
+	else
+	    echo "bad target directory $2"
+	fi
+	;;
+    toe)
+	ME="$0"
+	shift
+	TRUECAT="$1"
+	DBPATH=`dirname $1`
+	shift
+	cat > "$TEMPDIR/mailtoe.tmp"
+	VERDICT=`cat "$TEMPDIR/mailtoe.tmp" | "$ME" filter "$@"`
+	if [ "x$VERDICT" != "x`basename $TRUECAT`" ] ; then
+	    if [ "$VERDICT" = "spam" ] ; then
+		$AS -l -d "${DBPATH}/antispam.db" -g "${TEMPDIR}/mailtoe.tmp" > /dev/null
+	    else
+		$AS -l -d "${DBPATH}/antispam.db" -b "${TEMPDIR}/mailtoe.tmp" > /dev/null
+	    fi
+	fi
+	echo -ne "$VERDICT"
+	;;
+    foot)
+	ME="$0"
+	shift
+	TRUECAT="$1"
+	DBPATH=`dirname $1`
+	shift
+	cat > "$TEMPDIR/mailfoot.tmp"
+	VERDICT=`cat "$TEMPDIR/mailfoot.tmp" | "$ME" filter "$@"`
+	if [ "`basename $TRUECAT`" = "spam" ] ; then
+	    $AS -l -d "${DBPATH}/antispam.db" -b "${TEMPDIR}/mailfoot.tmp" > /dev/null
+	else
+	    $AS -l -d "${DBPATH}/antispam.db" -g "${TEMPDIR}/mailfoot.tmp" > /dev/null
+	fi
+	echo -ne "$VERDICT"
+	;;
+esac

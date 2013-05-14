@@ -1,0 +1,1207 @@
+\" t
+.TH DBACL 1 "Bayesian Text Classification Tools" "Version @VERSION@" ""
+.SH NAME
+dbacl \- a digramic Bayesian classifier for text recognition.
+.SH SYNOPSIS
+.HP
+.B dbacl
+[-01dvnirmwMNDXW]
+[-T
+.IR type
+] -l
+.I category
+[-h
+.IR size ]
+[-H
+.IR gsize ]
+[-x
+.IR decim ]
+[-q
+.IR quality ]
+[-w
+.IR max_order ]
+[-e
+.IR deftok ]
+[-o
+.IR online ]
+[-L
+.IR measure ]
+[-z
+.IR ftresh ]
+[-O
+.IR ronline ]...
+[-g
+.IR regex ]...
+[FILE]...
+.HP
+.B dbacl
+[-vnimNRXYP] [-h
+.IR size ]
+[-T
+.IR type]
+-c
+.I category
+[-c
+.IR category ]...
+[-f
+.IR keep ]...
+[FILE]...
+.HP
+.B dbacl
+-V
+.SH OVERVIEW
+.PP
+.B dbacl
+is a Bayesian text and email classifier. When using the
+.B -l
+switch, it learns a body of text
+and produce a file named
+.I category
+which summarizes the text. When using the
+.B -c
+switch, it compares an input text stream with any number of
+.I category
+files, and outputs the name of the closest match, or optionally
+various numerical scores explained below.
+.PP
+Whereas this manual page is intended as a reference, there are several
+tutorials and documents you can read to get specialized information.
+Specific documentation about the design of
+.B dbacl
+and the statistical models that it uses can be found in dbacl.ps.
+For a basic overview of text classification using
+.BR dbacl ,
+see tutorial.html. A companion tutorial geared
+towards email filtering is email.html. If you have trouble
+getting dbacl to classify reliably, read is_it_working.html.
+The USAGE section of this manual page
+also has some examples.
+.IP @PKGDATADIR@/doc/dbacl.ps
+.IP @PKGDATADIR@/doc/tutorial.html
+.IP @PKGDATADIR@/doc/email.html
+.IP @PKGDATADIR@/doc/is_it_working.html
+.PP
+.B dbacl
+uses a maximum entropy (minimum divergence) language model constructed
+with respect to a digramic reference measure (unknown tokens are
+predicted from digrams, i.e. pairs of letters). Practically, this
+means that a
+.I category
+is constructed from tokens in the training set, while previously
+unseen tokens can be predicted automatically from their letters. A
+token here is either a word (fragment) or a combination of words
+(fragments), selected according to various switches. Learning roughly
+works by tweaking token probabilities until the training data is least
+surprising.
+.SH EXIT_STATUS
+The normal shell exit conventions aren't followed (sorry!). When using the
+.B -l
+command form,
+.B dbacl
+returns zero on success, nonzero if an error occurs. When using the
+.B -c
+form,
+.B dbacl
+returns a positive integer corresponding to the
+.I category
+with the highest posterior probability. In case of a tie, the first most probable category is chosen. If an error occurs,
+.B dbacl
+returns zero.
+.SH DESCRIPTION
+.PP
+When using the
+.B -l
+command form,
+.B dbacl
+learns a category when given one or more FILE names, which should contain readable
+.SM ASCII
+text. If no FILE is given,
+.B dbacl
+learns from STDIN. If FILE is a directory, it is opened and all its files are read,
+but not its subdirectories. The result is saved in the binary file named
+.IR "category" ,
+and completely replaces any previous contents. As a convenience, if the
+environment variable DBACL_PATH contains a directory, then that is prepended
+to the file path, unless
+.I category
+starts with a '/' or a '.'.
+.PP
+The input text for learning is assumed to be unstructured plain text
+by default. This is not suitable for learning email, because email contains
+various transport encodings and formatting instructions which can reduce
+classification effectiveness. You must use the
+.B -T
+switch in that case so that
+.B dbacl
+knows it should perform decoding and filtering of MIME and HTML as appropriate.
+Apropriate switch values are "-T email" for RFC2822 email input, "-T html"
+for HTML input, "-T xml" for generic XML style input and "-T text" is the
+default plain text format. There are other values of the
+.B -T
+switch that also allow fine tuning of the decoding capabilities.
+.PP
+When using the
+.B -c
+command form,
+.B dbacl
+attempts to classify the text found in FILE, or STDIN if no FILE is
+given. Each possible
+.I category
+must be given separately, and should be the file name of a previously
+learned text corpus. As a convenience, if the variable DBACL_PATH
+contains a directory, it is prepended to each file path which doesn't
+start with a '/' or a '.'. The visible output of the classification
+depends on the combination of extra switches used. If no switch is
+used, then no output is shown on STDOUT. However,
+.B dbacl
+always produces an exit code which can be tested.
+.PP
+To see an output for a classification, you must use at least one of
+the
+.BR -v , -U , -n , -N , -D , -d
+switches. Sometimes, they can be used in combination to produce
+a natural variation of their individual outputs. Sometimes,
+.B dbacl
+also produces warnings on STDERR if applicable.
+.PP
+The
+.B -v
+switch outputs the name of the best category among all the choices given.
+.PP
+The
+.B -U
+switch outputs the name of the best category followed by a confidence
+percentage. Normally, this is the switch that you want to use. A percentage
+of 100% means that
+.B dbacl
+is sure of its choice, while a percentage of 0% means that some other
+category is equally likely. This is not the model probability, but measures
+how unambiguous the classification is, and can
+be used to tag unsure classifications (e.g. if the confidence is 25% or less).
+.PP
+The
+.B -N
+switch prints each category name followed by its (posterior) probability, expressed as a percentage. The percentages always sum to 100%. This is intuitive, but only valuable if the document 
+being classified contains a handful of tokens (ten or less). In the common
+case with many more tokens, the probabilities are always extremely close to 100% and 0%.
+.PP
+The
+.B -n
+switch prints each category name followed by the negative logarithm of its
+probability. This is equivalent to using the
+.B -N
+switch, but much more useful. The smallest number gives the best category. A more convenient
+form is to use both
+.B -n
+and
+.B -v
+which prints each category name followed by the cross entropy and the
+number of tokens analyzed. The cross entropy measures (in bits) the average
+compression rate which is achievable, under the given category model, per token
+of input text. If you use all three of
+.BR -n , -v , -X
+then an extra value is output for each category, representing a kind
+of p-value for each category score. This indicates how typical the
+score is compared to the training documents, but only works if the
+.B -X
+switch was used during learning, and only for some types of models (e.g. email).
+These p-values are uniformly distributed and independent (if the
+categories are independent), so can be combined using Fisher's chi
+squared test to obtain composite p-values for groupings of categories.
+.PP
+The
+.B -v
+and
+.B -X
+switches together print each category name followed by a detailed
+decomposition of the category score, factored into ( divergence rate +
+shannon entropy rate )* token count @ p-value. Again, this only works in some types of models.
+.PP
+The
+.B -v
+and
+.B -U
+switches print each category name followed by a decomposition of the
+category score into ( divergence rate + shannon entropy rate # score
+variance )* token count.
+.PP
+The
+.B -D
+switch prints out the input text as modified internally by
+.B dbacl
+prior to tokenization. For example, if a MIME encoded email document is classified, then this prints the decoded text that will be actually tokenized and classified. This switch is mainly useful for debugging.
+.PP
+The
+.B -d
+switch dumps tokens and scores while they are being read. It is useful
+for debugging, or if you want to create graphical representations of the
+classification. A detailed explanation of the output is beyond the scope
+of this manual page, but is straightforward if you've read dbacl.ps.
+Possible variations include
+.B -d
+together with
+.B -n
+or
+.BR -N .
+.PP
+Classification can be done with one or several categories in principle. When
+two or more categories are used, the Bayesian posterior probability
+is used, given the input text, with a uniform prior distribution on
+categories. For other choices of prior, see the companion utility
+.BR bayesol (1).
+When a single category is used, classification can
+be done by comparing the score with a treshold. In practice however,
+much better results are obtained with several categories.
+.PP
+Learning and classifying cannot be mixed on the same command
+invocation, however there are no locking issues and separate
+.B dbacl
+processes can operate simultaneously with obvious results, because
+file operations are designed to be atomic.
+.PP
+Finally, note that
+.B dbacl
+does not manage your document corpora or your computed categories.
+In particular, 
+.B dbacl
+cannot add or subtract a document from a category file directly.
+If you want to learn a category incrementally, the standard way
+is to keep adding to your document corpus, and learn the whole corpus
+each time. By keeping control of your
+archives, you can never lose the information in your categories, and
+you can easily experiment with different switches or tokenizations or
+sets of training documents if you like.
+.PP
+If the standard incremental learning method is too slow, the
+.B -o
+switch can help. This creates a data file named 
+.IR online
+which contains all
+the document statistics that have been learned. When you use the
+.B -l
+and
+.B -o
+switches together, dbacl merges the 
+.IR online
+data file (if it exists) 
+with the new document(s) to be learned, and recreates an updated
+version of
+.IR online .
+This is equivalent to adding the new documents to the
+corpus and relearning the whole corpus, but faster. However, documents
+cannot be removed if you change your mind. This is a limitation of 
+dbacl which cannot be changed for mathematical reasons. You can work around 
+this by making backups of the 
+.IR online
+data file. It is also possible to merge
+one or more extra
+.IR online
+data files simultaneously by using the 
+.B -O
+switch one or more times.
+.SH SECONDARY_SWITCHES
+.PP
+By default,
+.B dbacl
+classifies the input text as a whole, ie it only outputs a single result even if
+you specify several input files. If you want to classify multiple input files 
+you can either call
+.B dbacl
+repeatedly (which is fast when you use the 
+.B -m
+switch), or use the
+.BR -F
+switch, which prints each input FILE followed by the result for that FILE.
+Alternatively, you can classify each line of the input individually, by using the
+.B -f
+option, which prints only those
+lines which match one or more models identified by
+.I keep
+(use the category name or number to refer to a category). This last switch is useful if you
+want to filter out some lines, but note that if the lines are short, then
+the error rate can be high.
+.PP
+The
+.BR -e , -w , -g , -j
+switches are used for selecting an appropriate tokenization scheme. A token is
+a word or word fragment or combination of words or fragments. The shape of
+tokens is important because it forms the basis of the language models used by
+.BR dbacl .
+The
+.B -e
+switch selects a predefined tokenization scheme, which is speedy but limited.
+The
+.B -w
+switch specifies composite tokens derived from the
+.B -e
+switch. For example, "-e alnum -w 2" means that tokens should be alphanumeric
+word fragments combined into overlapping pairs (bigrams). When the
+.B -j
+switch is used, all tokens are converted to lowercase, which reduces the 
+number of possible tokens and therefore memory consumption.
+.PP
+If the
+.B -g
+switch is used, you can completely specify what the tokens should look like
+using a regular expression. Several
+.B -g
+switches can be used to construct complex tokenization schemes, and parentheses
+within each expression can be used to select fragments and combine them into
+n-grams. The cost of such flexibility is reduced classification and learning speed. When experimenting with tokenization schemes, try using the
+.B -d
+or
+.B -D
+switches while learning or classifying, as they will print the tokens
+explicitly so you can see what text fragments are picked up or missed
+out. For regular exression syntax, see
+.BR regex (7).
+.PP
+The
+.B -h
+and
+.B -H
+switches regulate how much memory
+.B dbacl
+may use for learning. Text classification can use a lot of memory, and by default
+.B dbacl
+limits itself even at the expense of learning accuracy. In many cases
+if a limit is reached, a warning message will be printed on STDERR
+with some advice.
+.PP
+When relearning the same category several times, a significant speedup can be obtained by using the
+.B -1
+switch, as this allows the previously learned probabilities to be read from the category and reused.
+.PP
+Note that classification accuracy depends foremost on the amount and quality of the training samples, and then only on amount of tweaking.
+.SH EXIT STATUS
+When using the
+.B -l
+command form,
+.B dbacl
+returns zero on success. When using the
+.B -c
+form,
+.B dbacl
+returns a positive integer (1,2,3...) corresponding to the
+.I category
+with the highest posterior probability. In case of a tie, the first most probable
+category is chosen. If an error occurs,
+.B dbacl
+returns zero.
+.SH OPTIONS
+.IP -0
+When learning, prevents weight preloading. Normally,
+.B dbacl
+checks if the category file already exists, and if so, tries to use the
+existing weights as a starting point. This can dramatically speed up learning.
+If the
+.B -0
+(zero) switch is set, then
+.B dbacl
+behaves as if no category file already exists. This is mainly useful for testing.
+This switch is now enabled by default, to protect against weight drift which
+can reduce accuracy over many learning iterations. Use
+.B -1
+to force preloading.
+.IP -1
+Force weight preloading if the category file already exists. See discussion of the
+.B -0
+switch.
+.IP -a
+Append scores. Every input line is written to STDOUT and the dbacl scores are
+appended. This is useful for postprocessing with
+.BR bayesol (1).
+For ease of processing, every original
+input line is indented by a single space (to distinguish them from the appended scores), and the line with the scores (if
+.B -n
+is used) is prefixed with the string "scores ". If a second copy of
+.B dbacl
+needs to read this output later, it should be invoked with the
+.B -A
+switch.
+.IP -d
+Dump the model parameters to STDOUT. In conjunction with the
+.B -l
+option, this produces a human-readable summary of the maximum entropy model. In conjunction with the
+.B -c
+option, displays the contribution of each token to the final score. Suppresses all other normal output.
+.IP -e
+Select character class for default (not regex-based) tokenization. By default,
+tokens are alphabetic strings only. This corresponds to the case when
+.I deftok
+is "alpha". Possible values for
+.I deftok
+are "alpha", "alnum", "graph", "char", "cef" and "adp".
+The last two are custom tokenizers intended for email messages.  See also
+.BR isalpha (3).
+The "char" tokenizer picks up single printable characters 
+rather than bigger tokens, and is intended for testing only.
+.IP -f
+Filter each line of input separately, passing to STDOUT only lines
+which match the
+.I category
+identified as
+.IR keep .
+This option should be used repeatedly for each
+.I category
+which must be kept.
+.I keep
+can be either the
+.I category
+file name, or a positive integer representing the required
+.I category
+in the same
+order it appears on the command line.
+.IP
+Output lines are flushed as soon as they are written. If the input
+file is a pipe or character device,
+then an attempt is made to use line buffering mode,
+otherwise the more
+efficient block buffering is used.
+.IP -g
+Learn only features described by the extended regular expression
+.IR regex .
+This overrides the default feature selection method (see
+.B -w
+option) and learns, for each line of input, only tokens constructed
+from the concatenation of strings which match the tagged
+subexpressions within the supplied
+.IR regex .
+All substrings which match
+.IR regex
+within a suffix of each input line are treated as features,
+even if they overlap on the input line.
+.IP
+As an optional convenience,
+.I regex
+can include the suffix
+.I ||xyz
+which indicates which parenthesized subexpressions should
+be tagged. In this case,
+.I xyz
+should consist exclusively of digits 1 to 9, numbering exactly those subexpressions which should be tagged. Alternatively, if no parentheses exist within
+.IR regex ,
+then it is assumed that the whole expression must be captured.
+.IP -h
+Set the size of the hash table to 2^\fIsize\fP
+elements. When using the
+.B -l
+option, this refers to the total number of features allowed
+in the maximum
+entropy model being learned. When using the
+.B -c
+option toghether with the
+.B -M
+switch and multinomial type categories,
+this refers to the maximum number of features taken into account during classification.
+Without the
+.B -M
+switch, this option has no effect.
+.IP -i
+Fully internationalized mode. Forces the use of wide characters internally,
+which is necessary in some locales. This incurs a noticeable performance penalty.
+.IP -j
+Make features case sensitive. Normally, all features are converted to lower
+case during processing, which reduces storage requirements and improves
+statistical estimates for small datasets. With this option, the original
+capitalization is used for each feature. This can improve classification
+accuracy.
+.IP -m
+Aggressively maps categories into memory and locks them into
+RAM to prevent swapping, if possible. This is useful when speed is paramount and memory is plentiful, for example when testing the classifier on large datasets.
+.IP
+Locking may require relaxing user limits with
+.BR ulimit (1).
+Ask your system administrator. Beware when using the
+.B -m
+switch together with the
+.B -o
+switch, as only one dbacl process must learn or classify at a time to prevent file corruption. If no learning takes place, then the
+.B -m
+switch for classifying is always safe to use. See also the discussion for the
+.B -o
+switch.
+.IP -n
+Print scores for each
+.IR category .
+Each score is the product of two numbers, the cross entropy and the complexity of the input text under each model. Multiplied together, they represent the log probability that the input resembles the model. To see these numbers separately, use also the
+.B -v
+option. In conjunction with the
+.B -f
+option, stops filtering but prints each input line prepended with a list of scores for
+that line.
+.IP -q
+Select
+.I quality
+of learning, where
+.I quality
+can be 1,2,3,4. Higher values take longer to learn, and should be slightly more accurate. The default
+.I quality
+is 1 if the category file doesn't exist or weights cannot be preloaded, and 2 otherwise.
+.IP -o
+When learning, reads/writes partial token counts so they can be reused. Normally, category files are learned from exactly the input data given, and don't contain extraneous information. When this option is in effect, some extra information is
+saved in the file
+.IR online ,
+after all input was read. This information can be reread the next time that learning occurs, to continue where the previous dataset left off. If
+.I online
+doesn't exist, it is created. If
+.I online
+exists, it is read before learning, and updated afterwards. The file is approximately 3 times bigger (at least) than the learned
+.IR category .
+.IP
+In
+.BR dbacl ,
+file updates are atomic, but if using the
+.B -o
+switch, two or more processes should not learn simultaneously, as only one
+process will write a lasting category and memory dump. The
+.B -m
+switch can also speed up online learning, but beware of possible corruption.
+Only one process should read or write a file. This option is intended
+primarily for controlled test runs. See also the
+.B -O
+(big-oh) switch.
+.IP -r
+Learn the digramic reference model only. Skips the learning of extra features in
+the text corpus.
+.IP -v
+Verbose mode. When learning, print out details of the computation, when classifying, print out the name of the most probable
+.IR category .
+In conjunction with the
+.B -n
+option, prints the scores as an explicit product of the cross entropy and the complexity.
+.IP -w
+Select default features to be n-grams up to
+.IR max_order .
+This is incompatible with the
+.B -g
+option, which always takes precedence. If no
+.B -w
+or
+.B -g
+options are given,
+.B dbacl
+assumes
+.B -w
+1. Note that n-grams for n greater than 1 do not straddle line breaks by default.
+The
+.B -S
+switch enables line straddling. 
+.IP -x
+Set decimation probability to 1 - 2^(\fI-decim\fP).
+To reduce memory requirements when learning, some inputs are randomly skipped,
+and only a few are added to the model.
+Exact behaviour depends on the applicable
+.B -T
+option (default is
+.B -T
+"text").
+When the type is not "email" (eg "text"), then individual input features
+are added with probability 2^(\fI-decim\fP). When the type is "email", then
+full input messages are added with probability 2^(\fI-decim\fP).
+Within each such message, all features are used.
+.IP -z
+When learning, only take into account features whose occurrence count is strictly greater than ftreshold. By default, ftreshold is zero, so all features in the 
+training corpus are used. A negative value of ftreshold causes dbacl to subtract
+from the maximum observed feature count, and to use that if it is positive. For example, -z 1 means dbacl only learns features which occur at least twice in the corpus, and -z -5 means dbacl only learns the feature(s) whose occurrence count is within 4 of the global maximum.
+.IP -A
+Expect indented input and scores. With this switch,
+.B dbacl
+expects input lines to be indented by a single space character (which is then skipped).
+Lines
+starting with any other character are ignored. This is the counterpart to the
+.B -a
+switch above.
+When used together with the
+.B -a
+switch,
+.B dbacl
+outputs the skipped lines as they are,
+and reinserts the space at the front of each processed
+input line.
+.IP -D
+Print debug output. Do not use normally, but can be very useful for
+displaying the list features picked up while learning.
+.IP -F
+For each FILE of input, print the FILE name followed by the classification result (normally
+.B dbacl
+only prints a single result even if multiple files are listed as input).
+.IP -H
+Allow hash table to grow up to a maximum of 2^\fIgsize\fP elements during learning. Initial size is given by
+.B -h
+option.
+.IP -L
+Select the digramic reference measure for character transitions. The
+.IR measure
+can be one of "uniform", "dirichlet" or "maxent". Default is "uniform".
+.IP -M
+Force multinomial calculations. When learning, forces the model features to be treated multinomially. When classifying, corrects entropy scores to reflect multinomial probabilities (only applicable to multinomial type models, if present).
+Scores will always be lower, because the ordering of features is lost.
+.IP -N
+Print posterior probabilities for each
+.IR category .
+This assumes the supplied categories form an exhaustive list of possibilities.
+In conjunction with the
+.B -f
+option, stops filtering but prints each input line prepended with a summary of the
+posterior distribution for that line.
+.IP -O
+This switch causes the online data file named 
+.IR ronline
+to be merged during
+learning. The 
+.IR ronline
+file must be created using the -o (little-oh) switch. 
+Several -O data files can be merged simultaneously. This is intended to be
+a read only version of -o, to allow piecing together of several sets of preparsed
+data. See the description of the -o switch.
+.IP -R
+Include an extra category for purely random text. The category is called "random".
+Only makes sense when using the
+.B -c
+option.
+.IP -P
+Correct the category scores to include estimated prior
+probabilities. The prior probability estimate for each category is
+proportional to the number of documents or, if that doesn't make
+sense, the number of unique features. This can help with "balancing" when one
+category is learned from much more data than another. If all
+categories are learned from approximately the same amount of data (or
+maybe within a factor of 2), then this option should have little
+qualitative effect.
+.IP -S
+Enable line straddling. This is useful together with the
+.B -w
+option to allow n-grams for n > 1 to ignore line breaks, so a complex token can continue
+past the end of the line. This is not recommended for email.
+.IP -T
+Specify nonstandard text format. By default,
+.B dbacl
+assumes that the input text is a purely
+.SM ASCII
+text file. This corresponds to
+the case when
+.I type
+is "text".
+.IP
+There are several types and subtypes which can be used to
+clean the input text of extraneous tokens before actual learning or classifying
+takes place. Each (sub)type you wish to use must be indicated with a separate
+.B -T
+option on the command line, and automatically implies the corresponding type.
+.IP
+The "text" type is for unstructured plain text. No cleanup is performed. This
+is the default if no types are given on the command line.
+.IP
+The "email" type is for mbox format input files or single RFC822 emails.
+Headers are recognized and most are skipped. To include extra RFC822 standard
+headers (except for trace headers), use the "email:headers" subtype.
+To include
+trace headers, use the "email:theaders" subtype. To include
+all headers in the email, use the "email:xheaders" subtype. To skip all headers,
+except the subject, use "email:noheaders". To scan
+binary attachments for strings, use the "email:atts" subtype.
+.IP
+When the "email" type is in effect, HTML markup is automatically removed from text attachments except text/plain attachments. To also remove HTML markup from plain text attachments, use "email:noplain". To prevent HTML markup removal in all text attachments, use "email:plain".
+.IP
+The "html" type is for removing HTML markup (between <html> and </html> tags) and surrounding text. Note that if the "email" type is enabled, then "html" is automatically enabled for compatible message attachments only.
+.IP
+The "xml" type is like "html", but doesn't honour <html> and </html>, and doesn't interpret tags (so this should be more properly called "angle markup" removal, and has nothing to do with actual XML semantics).
+.IP
+When "html" is enabled, most markup attributes are lost (for values of 'most' close to 'all').
+The "html:links" subtype
+forces link urls to be parsed and learned, which would
+otherwise be ignored. The "html:alt" subtype forces parsing of alternative text
+in ALT attributes and various other tags. The "html:scripts" subtype forces
+parsing of scripts, "html:styles" forces parsing of styles, "html:forms" forces
+parsing of form values,
+while "html:comments" forces parsing of HTML comments.
+.IP -U
+Print (U)nambiguity.
+When used in conjunction with the
+.B -v
+switch, prints scores followed by their empirical standard
+deviations. When used alone, prints the best category, followed by an
+estimated probability that this category choice is unambiguous. More
+precisely, the probability measures lack of overlap of CLT confidence
+intervals for each category score (If there is overlap, then there is
+ambiguity).
+.IP
+This estimated probability can be used as an "unsure" flag,
+e.g. if the estimated probability is lower than 50%. Formally,
+a score of 0% means another category is equally likely to apply to
+the input, and a score of 100% means no other category is likely to apply
+to the input. Note that this type of confidence is unrelated to the
+.B -X
+switch. Also, the probability estimate is usually low if the document is short, or
+if the message contains many tokens that have never been seen before (only applies to
+uniform digramic measure).
+.IP -V
+Print the program version number and exit.
+.IP -W
+Like -w, but prevents features from straddling newlines. See the description of
+.BR -w .
+.IP -X
+Print the confidence in the score calculated for each
+.IR category ,
+when used together with the
+.B -n
+or
+.B -N
+switch. Prepares the model for confidence scores, when used with the
+.B -l
+switch.
+The confidence is an estimate of the typicality of the score, assuming
+the null hypothesis that the
+given category is correct. When used with the
+.B -v
+switch alone, factorizes the score as the empirical divergence plus the shannon entropy, multiplied by complexity, in that order. The
+.B -X
+switch is not supported in all possible models, and displays a percentage of "0.0" if it can't be calculated. Note that for unknown documents, it is quite common
+to have confidences close to zero.
+.IP -Y
+Print the cumulative media counts. Some tokenizers include a medium variable with
+each token: for example, in email classification the word "the" can appear in the
+subject or the body of a message, but the subject is counted as a separate medium
+from the body. This allows the token frequencies to be kept separate, even though
+the word is the same. Currently, up to 16 different media are supported (0-15),
+with the following interpretation for email:
+
+ 0	unused.
+ 1	default medium.
+ 2	mail body or attachment in HTML format.
+ 3	mail body or attachment in plain text format.
+ 4	mail header unknown.
+ 5	User-Agent, Comments, Keywords, Note
+ 6	X-MS*, Categor*, Priority, Importance, Thread-*
+ 7	X-*
+ 8	List-*
+ 9	MIME-Version, Content-*
+ 10	Subject
+ 11	To
+ 12	Sender, Sent, BCC, CC, From
+ 13	Resent-*, Original-*
+ 14	Message-ID, References, In-Reply-To
+ 15	Received, Return-Path, Return-Receipt-To, Reply-To
+
+The 
+.B -Y
+switch prints the number of tokens observed in each separate medium, in order from
+0 to 15.
+.SH USAGE
+.PP
+To create two category files in the current directory from two
+.SM ASCII
+text files named Mark_Twain.txt and William_Shakespeare.txt respectively, type:
+.PP
+.na
+% dbacl -l twain Mark_Twain.txt
+.br
+% dbacl -l shake William_Shakespeare.txt
+.ad
+.PP
+Now you can classify input text, for example:
+.PP
+.na
+% echo "howdy" | dbacl -v -c twain -c shake
+.br
+twain
+.br
+% echo "to be or not to be" | dbacl -v -c twain -c shake
+.br
+shake
+.ad
+.PP
+Note that the
+.B -v
+option at least is necessary, otherwise
+.B dbacl
+does not print anything. The return value is
+1 in the first case, 2 in the second.
+.PP
+.ad
+% echo "to be or not to be" | dbacl -v -N -c twain -c shake
+.br
+twain 22.63% shake 77.37%
+.br
+% echo "to be or not to be" | dbacl -v -n -c twain -c shake
+.br
+twain  7.04 * 6.0 shake  6.74 * 6.0 
+.ad
+.PP
+These invocations are equivalent. The numbers 6.74 and 7.04 represent how close
+the average token is to each category, and 6.0 is the number of tokens observed. If you want to print a simple confidence
+value together with the best category, replace
+.B -v
+with
+.BR -U .
+.PP
+.na
+% echo "to be or not to be" | dbacl -U -c twain -c shake
+.br
+shake # 34%
+.ad
+.PP
+Note that the true probability of category
+.I shake
+versus category
+.I twain
+is 77.37%, but the calculation is somewhat ambiguous, and 34% is the confidence out of 100% that the calculation is qualitatively correct.
+.PP
+Suppose a file document.txt contains English text lines interspersed
+with noise lines. To filter out the noise lines from the English lines,
+assuming you have an existing category shake say, type:
+.PP
+.na
+% dbacl -c shake -f shake -R document.txt > document.txt_eng
+.br
+% dbacl -c shake -f random -R document.txt > document.txt_rnd
+.ad
+.PP
+Note that the quality of the results will vary depending on
+how well the categories shake and random represent each input line.
+It is sometimes useful to see the posterior probabilities for each line
+without filtering:
+.PP
+.na
+% dbacl -c shake -f shake -RN document.txt > document.txt_probs
+.ad
+.PP
+You can now postprocess the posterior probabilities for each line of text
+with another script, to replicate an arbitrary Bayesian decision rule of your choice.
+.PP
+In the special case of exactly two categories, the optimal Bayesian
+decision procedure can be implemented for documents as follows: let
+.I p1
+be the prior probability
+that the input text is classified as
+.IR category1 .
+Consequently, the prior probability
+of classifying as
+.I category2
+is 1 -
+.IR p1 .
+Let
+.I u12
+be the cost of misclassifying
+a
+.I category1
+input text as belonging to
+.I category2
+and vice versa for
+.IR u21 .
+We assume there is no cost for classifying correctly.
+Then the following command implements the optimal Bayesian decision:
+.HP
+.na
+% dbacl -n -c
+.I category1
+-c
+.I category2
+| awk '{ if($2 *
+.I p1
+*
+.I u12
+> $4 * (1 -
+.IR p1 )
+*
+.IR u21 )
+{ print $1; } else { print $3; } }'
+.ad
+.PP
+.B dbacl
+can also be used in conjunction with
+.BR procmail (1)
+to implement a simple Bayesian email classification system. Assume that
+incoming mail should be automatically delivered to one of three mail
+folders located in $MAILDIR and named
+.IR work ,
+.IR personal ,
+and
+.IR spam .
+Initially, these must be created and filled with appropriate sample emails.
+A
+.BR crontab (1)
+file can be used to learn the three categories once a day, e.g.
+.PP
+.na
+CATS=$HOME/.dbacl
+.br
+5  0 * * * dbacl -T email -l $CATS/work $MAILDIR/work
+.br
+10 0 * * * dbacl -T email -l $CATS/personal $MAILDIR/personal
+.br
+15 0 * * * dbacl -T email -l $CATS/spam $MAILDIR/spam
+.ad
+.PP
+To automatically deliver each incoming email into the appropriate folder,
+the following
+.BR procmailrc (5)
+recipe fragment could be used:
+.PP
+.na
+CATS=$HOME/.dbacl
+.ad
+.PP
+.na
+# run the spam classifier
+.br
+:0 c
+.br
+YAY=| dbacl -vT email -c $CATS/work -c $CATS/personal -c $CATS/spam
+.ad
+.PP
+.na
+# send to the appropriate mailbox
+.br
+:0:
+.br
+* ? test -n "$YAY"
+.br
+$MAILDIR/$YAY
+.ad
+.PP
+.na
+:0:
+.br
+$DEFAULT
+.ad
+.PP
+Sometimes,
+.B dbacl
+will send the email to the wrong mailbox. In that case, the misclassified message
+should be removed from its wrong destination and placed in the correct mailbox.
+The error will be corrected the next time your messages are learned.
+If it is left in the wrong category,
+.B dbacl
+will learn the wrong corpus statistics.
+.PP
+The default text features (tokens) read by
+.B dbacl
+are purely alphabetic strings, which minimizes memory requirements but can
+be unrealistic in some cases. To construct models based on alphanumeric
+tokens, use the
+.B -e
+switch. The example below also uses the optional
+.B -D
+switch, which prints a list of actual tokens found in the document:
+.PP
+.na
+% dbacl -e alnum -D -l twain Mark_Twain.txt | less
+.ad
+.PP
+It is also possible to override the default feature selection method used to learn
+the category model by means of regular expressions. For example, the following
+duplicates the default feature selection method in the C locale,
+while being much slower:
+.HP
+.na
+% dbacl -l twain -g '^([[:alpha:]]+)' -g '[^[:alpha:]]([[:alpha:]]+)' Mark_Twain.txt
+.ad
+.PP
+The category twain which is obtained depends only on single alphabetic words
+in the text file Mark_Twain.txt (and computed digram statistics for prediction).
+For a second example, the following command builds a smoothed Markovian (word bigram) model
+which depends on pairs of consecutive words within each line (but pairs cannot
+straddle a line break):
+.HP
+.na
+% dbacl -l twain2 -g '(^|[^[:alpha:]])([[:alpha:]]+)||2' -g '(^|[^[:alpha:]])([[:alpha:]]+)[^[:alpha:]]+([[:alpha:]]+)||23' Mark_Twain.txt
+.ad
+.PP
+More general, line based, n-gram models of all orders (up to 7) can be built in a similar way.
+To construct paragraph based models, you should reformat
+the input corpora with
+.BR awk (1)
+or
+.BR sed (1)
+to obtain one paragraph per line. Line size is limited by available memory,
+but note that regex performance will degrade quickly for long lines.
+.SH PERFORMANCE
+.PP
+The underlying assumption of statistical learning is that a relatively
+small number of training documents can represent a much larger set of
+input documents. Thus in the long run, learning can grind to a halt without
+serious impact on classification accuracy. While not true in reality,
+this assumption is surprisingly accurate for problems such as email filtering.
+In practice, this means that a well chosen corpus on the order of ten thousand
+documents is sufficient for highly accurate results for years. 
+Continual learning after such a critical mass results in diminishing returns.
+Of course, when real world input document patterns change
+dramatically, the predictive power of the models can be lost. At the other
+end, a few hundred documents already give acceptable results in most cases.
+.PP
+.B dbacl
+is heavily optimized for the case of frequent classifications but infrequent
+batch learning. This is the long run optimum described above. Under ideal conditions,
+.B dbacl
+can classify a hundred emails per second on low end hardware (500Mhz Pentium III). Learning speed is not very much slower, but takes effectively much longer for large document
+collections for various reasons.
+When using the
+.B -m
+switch, data structures are aggressively mapped into memory if possible,
+reducing overheads for both I/O and memory allocations.
+.PP
+.B dbacl
+throws away its input as soon as possible, and has no limits on the input document size. Both classification and learning speed are directly proportional to the number of
+tokens in the input, but learning also needs a nonlinear optimization step 
+which takes time proportional to the number of unique tokens discovered.
+At time of writing,
+.B dbacl
+is one of the fastest open source mail filters given its optimal usage scenario, but uses more memory for learning than other filters. 
+.SH MULTIPLE PROCESSES AND DATA CORRUPTION
+.PP
+When saving category files,
+.B dbacl
+first writes out a temporary file in the same location, and renames it afterwards. If a problem or crash occurs during learning, the old category file is therefore left untouched. This ensures that categories can never be corrupted, no matter how many processes try to simultaneously learn or classify, and means that valid categories are available for classification at any time.
+.PP
+When using the
+.B -m
+switch, file contents are memory mapped for speedy reading and writing. This,
+together with the
+.B -o
+switch,
+is intended mainly for testing purposes, when tens of thousands of messages
+must be learned and scored in a laboratory to measure
+.BR dbacl 's
+accuracy. Because no file locking is attempted for performance reasons,
+corruptions are possible, unless you make sure that only one
+.B dbacl
+process reads or writes any file at any given time. This is the only
+case (-m and -o together) when corruption is possible.
+.SH MEMORY USE
+.PP
+When classifying a document,
+.B dbacl
+loads all indicated categories into RAM, so the total memory needed is
+approximately the sum of the category file sizes plus a fixed small overhead.
+The input document is consumed while being read, so its size doesn't matter,
+but very long lines can take up space.
+When using the 
+.B -m
+switch, the categories are read using 
+.BR mmap (2)
+as available.
+.PP
+When learning,
+.B dbacl
+keeps a large structure in memory which contains many objects which won't
+be saved into the output category. The size of this structure is proportional to the number of unique tokens read, but not the size of the input documents, since they are discarded while being read. As a rough guide, this structure is
+4x-5x the size of the final category file that is produced.   
+.PP
+To prevent unchecked memory growth,
+.B dbacl
+allocates by default a fixed smallish amount of memory for tokens. When this space is used up, further tokens are discarded which has the effect of skewing the learned category making it less usable as more tokens are dropped. A warning is printed on STDERR in such a case.
+.PP
+The
+.B -h
+switch lets you fix the initial size of the token space in powers of 2,
+ie "-h 17" means 2^17 = 131072 possible tokens. If you type
+"dbacl -V", you can see the number of bytes needed for each token when either learning or classifying. Multiply
+this number by the maximum number of possible tokens to estimate the memory
+needed for learning. The 
+.B -H
+switch lets
+.B dbacl
+grow its tables automatically if and when needed, up to a maximum specified. So if you
+type "-H 21", then the initial size will be doubled repeatedly if necessary,
+up to approximately two million unique tokens.
+.PP
+When learning with the
+.B -X
+switch, a handful of input documents are also kept in RAM throughout.
+.SH ENVIRONMENT
+.PP
+.IP DBACL_PATH
+When this variable is set, its value is prepended to every
+.I category
+filename which doesn't start with a '/' or a '.'.
+.SH SIGNALS
+.PP
+.IP INT
+If this signal is caught,
+.B dbacl
+simply exits without doing any cleanup or other operations. This signal can
+often be sent by pressing Ctrl-C on the keyboard. See
+.BR stty (1).
+.IP "HUP, QUIT, TERM"
+If one of these signals is caught,
+.B dbacl
+stops reading input and continues its operation as if no more input was available. This is a way of quitting gracefully, but note that in learning mode, a category file will be written based on the incomplete input. The QUIT signal can often be sent by pressing Ctrl-\ on the keyboard. See
+.BR stty (1).
+.IP USR1
+If this signal is caught,
+.B dbacl
+reloads the current categories at the earliest feasible opportunity. This
+is not normally useful at all, but might be in special cases, such as if
+the
+.B -f
+switch is invoked together with input from a long running pipe.
+.SH NOTES
+.PP
+.B dbacl
+generated category files are in binary format, and may or may not be portable
+to systems using a different byte order architecture (this depends on how
+.B dbacl
+was compiled). The
+.B -V
+switch prints out whether categories are portable, or else you can just experiment.
+.PP
+.B dbacl
+does not recognize functionally equivalent regular expressions, and in this
+case duplicate features will be counted several times.
+.PP
+With every learned category, the command line options that were used are saved.
+When classifying, make sure that every relevant category was learned with the
+same set of options (regexes are allowed to differ), otherwise behaviour is undefined. There is no need to repeat all the switches when classifying.
+.PP
+If you get many digitization warnings, then you are trying to learn too much
+data at once, or your model is too complex.
+.B dbacl
+is compiled to save memory by digitizing final weights, but you can disable
+digitization by editing dbacl.h and recompiling.
+.PP
+.B dbacl
+offers several built-in tokenizers (see
+.B -e
+switch) with more to come in future versions, as the author invents them.
+While the default tokenizer may evolve, no tokenizer should ever be removed, so
+that you can always simulate previous
+.B dbacl
+behaviour subject to bug fixes and architectural changes.
+.PP
+The confidence estimates obtained through the
+.B -X
+switch are underestimates, ie are more conservative than they should be.
+.SH BUGS
+.PP
+"Ya know, some day scientists are gonna invent something that will outsmart a rabbit." (Robot Rabbit, 1953)
+.SH SOURCE
+.PP
+The source code for the latest version of this program is available at the
+following locations:
+.PP
+.na
+http://www.lbreyer.com/gpl.html
+.br
+http://dbacl.sourceforge.net
+.ad
+.SH AUTHOR
+.PP
+Laird A. Breyer <laird@lbreyer.com>
+.SH SEE ALSO
+.PP
+.BR awk (1),
+.BR bayesol (1),
+.BR crontab (1),
+.BR hmine (1),
+.BR hypex (1),
+.BR less (1),
+.BR mailcross (1),
+.BR mailfoot (1),
+.BR mailinspect (1),
+.BR mailtoe (1),
+.BR procmailex (5),
+.BR regex (7),
+.BR stty (1),
+.BR sed (1)

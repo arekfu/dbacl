@@ -1,0 +1,13 @@
+# example risk specification using "interest rate" losses
+categories {
+    one, two, three
+}
+prior {
+    1, 1, 1
+}
+loss_matrix { 
+"" one   [ 0,               (1.1)^complexity,  (1.0)^complexity ]
+"" two   [(1.1)^complexity, 0,                 (1.7)^complexity ] 
+"" three [(1.5)^complexity, (1.01)^complexity, 0 ]
+} 
+

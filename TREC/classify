@@ -1,0 +1,12 @@
+#!/bin/sh
+. ./share/dbacl/TREC/OPTIONS
+line=`./bin/dbacl -m $DBACL_COPTS -c ./db/ham -c ./db/spam $1 2>>stderr.log`
+hscore=`expr "$line" : "$DBACL_CHAM" \| 0`
+sscore=`expr "$line" : "$DBACL_CSPAM" \| 0`
+score=`echo "$DBACL_SGN ($hscore - $sscore)" | bc`
+case $score in
+0) class='ham' ;;
+-*) class='ham' ;;
+*) class='spam' ;;
+esac
+echo class=$class score=$score

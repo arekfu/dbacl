@@ -1,0 +1,248 @@
+\" t
+.TH MAILINSPECT 1 "Bayesian Text Classification Tools" "Version @VERSION@" ""
+.SH NAME
+mailinspect \- sort an mbox by category and pipe emails to a command.
+.SH SYNOPSIS
+.HP
+.B mailinspect [-zjiI]
+-c 
+.I category
+FILE [-gG 
+.IR regex ]...
+[-s
+.IR command ]
+[-p 
+.IR style ]
+[-o
+.IR scoring ]
+.HP
+.B mailinspect
+-V
+.SH DESCRIPTION
+.PP
+.B mailinspect
+reads the single mbox folder named FILE and sorts it in order of similarity to
+the 
+.IR category , 
+which must have been 
+created by 
+.BR dbacl (1). 
+It can be used as a command line tool or interactively, when given the 
+.B -I 
+switch. 
+.PP
+When used as a command line tool, 
+.B mailinspect
+prints the sorted list of emails on STDOUT. Each line consists of a
+seek position for the given email within FILE, followed by the score and a description
+string in one of several styles chosen via the 
+.B -p
+option. 
+.PP
+When supplying a 
+.I command
+string in conjunction with the 
+.B -s
+option, 
+.B mailinspect
+spawns a shell and executes 
+.I command 
+for every email in FILE (possibly selected via the 
+.BR -g " or" -G
+options), in the sorted order. This is similar to the 
+.BR formail (1)
+functionality, except the latter doesn't order the emails.
+.PP
+In interactive mode, all the command line functionality is available via
+keypresses. The sorted list of emails is displayed in a scrollable format,
+and can be viewed, searched, tagged, resorted and sent to shell commands. Predefined
+shell commands can be associated with function keys. See the usage section below.
+.PP
+The sorting heuristics are currently (and may always be) experimental, 
+so there is no guarantee that the orderings are particularly well suited
+for anything. 
+.SH EXIT STATUS
+.B
+mailinspect
+returns 1 on success, 0 if some error occurred.
+.SH OPTIONS
+.IP -c
+Use 
+.I category
+to compute the scores and sort the emails, which 
+should be the file name of a 
+.BR dbacl (1)
+category.
+.IP -g
+Only emails matching the regular expression
+.I regex
+are sorted. All other emails are ignored. When several
+.B -g
+and 
+.B -G
+options are present on the command line,
+earlier regular expressions are overridden
+by later ones where applicable.
+.IP -i
+Force internationalized mode. 
+.IP -j
+Force regular expression searches to be case sensitive.
+.IP -o
+Determines the scoring formula to be used. The parameter 
+.I scoring
+must be an integer greater than or equal to zero. By default,
+.I scoring 
+equals zero.
+.IP -p
+Prints the email index in the given style. The parameter 
+.I style
+must be an integer greater than or equal to zero. By default,
+.I style
+equals zero.
+.IP -s
+For each email in the list, execute the shell
+.IR command ,
+with the email body on STDIN. Emails are processed in sorted order.
+.IP -z
+Reverse sort order. Normally, emails are sorted in order of closest 
+to furthest relative to 
+.IR category ,
+but in this case, the opposite is true. 
+.IP -I
+Interactive mode. Instead of printing the sorted list of emails
+on STDOUT, emails are displayed and can be scrolled, viewed, 
+searched and piped interactively at the terminal.
+.IP -G
+Only emails 
+.B not
+matching the regular expression
+.I regex
+are sorted. Opposite of 
+.B -g
+switch.
+.IP -V
+Print the program version number and exit. 
+.SH USAGE
+.PP
+.B mailinspect 
+needs to read a prelearned
+.I category 
+before it can sort the emails in FILE. See 
+.BR dbacl (1).
+.PP
+Suppose you have two mail folders named 
+.I good.mbox
+and
+.IR bad.mbox 
+respectively. You can create appropriate categories by typing the commands
+.PP
+.na
+% dbacl -l good good.mbox -T email
+.br
+% dbacl -l bad bad.mbox -T email
+.ad
+.PP
+Next, you can type the following command to view interactively the 
+.I bad.mbox
+file with the emails whose score is closest to the category
+.I good
+listed first:
+.PP
+.na
+% mailinspect -I -c good bad.mbox 
+.ad
+.PP
+Alternatively, you might be interested only in the five emails in the folder 
+.I bad.mbox
+whose score marks them as the furthest away from the category 
+.BR bad ,
+completely independently from any other category such as 
+.I good 
+(ie you want outliers in the scoring sense).
+.PP
+.na
+% mailinspect -z -c bad bad.mbox | head -5
+.ad
+.PP
+In interactive mode, the following keys are defined:
+.IP o
+toggles another scoring formula.
+.IP p
+toggles another display style.
+.IP q
+exits 
+.BR mailinspect .
+.IP s
+sends the currently highlighted email to a shell command.
+.IP S
+sends all currently tagged emails to a shell command, in sorted order.
+Every email executes the shell command independently.
+.IP t
+tags the currently highlighted email.
+.IP T
+tags all listed emails.
+.IP v
+sends the currently highlighted email to $PAGER for viewing. If the environment
+variable PAGER is not defined, sends the email to 
+.BR less (1).
+.IP u
+untags the highlighted email.
+.IP U
+untags all listed emails.
+.IP z
+reverses the sort order of displayed emails.
+.IP /
+searches for a regular expression (see 
+.BR regex (7))
+anywhere within the contents of all listed emails. Hides all emails
+which don't match.
+.IP ?
+like /, but hides all emails which match, keeping all those which don't match.
+.PP
+As a convenience, the function keys F1-F10 can each be associated 
+with a shell command string. In this
+case, typing a function key has the same effect as the S key, but the command is 
+already typed and ready to be edited/accepted.
+The function key associations are read from the configuration file .mailinspectrc
+if it exits. 
+.SH FILES
+.PP
+.IP $HOME/.mailinspectrc
+.B mailinspect 
+reads the file .mailinspectrc in the $HOME directory, if it exists. 
+This is a plain text file which contains entries of the form
+.IP
+.na
+# this is a comment
+.br
+F2 cat >> interesting.mbox
+.br
+F5 mail zarniwoop@megadodo.com
+.ad
+.SH ENVIRONMENT
+.PP
+.IP DBACL_PATH
+When this variable is set, its value is prepended to every 
+.I category
+filename which doesn't start with a '/'.
+.SH SOURCE
+.PP
+The source code for the latest version of this program is available at the
+following locations: 
+.PP
+.na
+http://www.lbreyer.com/gpl.html
+.br
+http://dbacl.sourceforge.net
+.ad
+.SH AUTHOR
+.PP
+Laird A. Breyer <laird@lbreyer.com>
+.SH SEE ALSO
+.PP
+.BR bayesol (1),
+.BR dbacl (1),
+.BR less (1),
+.BR mailcross (1),
+.BR regex (7)
+

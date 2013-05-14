@@ -1,0 +1,188 @@
+\" t
+.TH BAYESOL 1 "Bayesian Classification Tools" "Version @VERSION@" ""
+.SH NAME
+bayesol \- a Bayes solution calculator for use with dbacl.
+.SH SYNOPSIS
+.HP
+.B bayesol
+[-DVNniv] -c 
+.I riskspec
+[FILE]...
+.HP
+.B bayesol
+-V
+.SH DESCRIPTION
+.PP
+.B bayesol
+is a Bayes solution calculator designed to combine the output of 
+.BR dbacl (1) 
+with a prior distribution and a risk specification, and
+calculate the optimal Bayesian decision (which minimizes the posterior
+risk). 
+.PP
+The risk specification is read from the text file 
+.I riskspec 
+and must be written in a simple format described below. The 
+.BR dbacl (1) 
+output can either be read from FILE or from STDIN. 
+.SH EXIT STATUS
+On success, 
+.B bayesol
+returns a positive integer corresponding to the category with the lowest risk.
+In case of a problem, 
+.B bayesol
+returns zero.
+.SH OPTIONS
+.IP -c
+Classify using 
+.IR riskspec . 
+See the section RISK SPECIFICATION.
+.IP -i
+Fully internationalized mode. Forces the use of wide characters internally,
+which is necessary in some locales. This incurs a noticeable performance penalty.
+.IP -n
+Print risk scores for each 
+.IR category . 
+Each score is (approximately) the logarithm of the expected risk under that category. The lowest score (ie closest to -infinity) is best, etc.
+.IP -N
+Print recursive risk scores for each 
+.IR category . 
+Each score is (approximately) the logarithm of the best score based on
+the remaining categories, after the previously best scoring categories
+have been removed, and a normalizing factor was added. A full
+description is given in the technical report listed at the end of this
+manpange. The largest score (ie closest to +infinity) is best, etc.
+.IP -v
+Verbose mode. Prints to STDOUT the category with minimum posterior risk.
+In case several categories are possible, 
+prints the first category in the order in which they appear
+in the categories section of 
+.IR riskpspec .
+.IP -D
+Print debug output. Do not use.
+.IP -V
+Print the program version number and exit. 
+.SH RISK SPECIFICATION
+.B bayesol
+needs to read a text file 
+.I riskspec
+containing a risk specification. The format of this text file is as follows
+.IP
+.na
+categories { 
+.IR cat1 , 
+.IR cat2 , "" ..., 
+.IR catN }
+.br
+prior { 
+.IR p1 , 
+.IR p2 , "" ..., 
+.IR pN }
+.br
+loss_matrix {
+.br
+"\fIregex1\fR" \fIc1\fR [ 
+.IR formula11 ,
+.IR formula12 , "" ...,
+.IR formula1N ]
+.br
+"\fIregex2\fR" \fIc2\fR [ 
+.IR formula21 ,
+.IR formula22 , "" ...,
+.IR formula2N ]
+.br 
+ .
+.br
+ .
+.br
+"\fIregexM\fR" \fIcM\fR [ 
+.IR formulaM1 , 
+.IR formulaM2 , "" ..., 
+.IR formulaMN ]
+.br
+}
+.br
+.ad
+.PP
+In the above, 
+.IR cat1 ,
+.IR cat2 , "" ..., 
+.IR catN , 
+are category names, 
+.IR p1 ,
+.IR p2 , "" ...,
+.IR pN ,
+are non-negative numbers, 
+.IR regex1 ,
+.IR regex2 , "" ...,
+.IR regexM ,
+are (possibly empty) regular expression strings, 
+.IR c1 ,  
+.IR c2 , "" ...,
+.IR cM ,
+are instances of the category names 
+.IR cat1 ,
+.IR cat2 , "" ...,
+.IR catN , 
+and the formulas are numbers or mathematical expressions. 
+.PP
+Every category which appears in the categories section must appear at least
+once in the loss_matrix section, with an empty "" regular expression.
+To construct the actual loss matrix used in the decision calculations, 
+.B bayesol 
+selects, for each category appearing in the categories section,
+the first row whose regular expression is matched
+within FILE or STDIN, or the first row with empty regular expression if there
+are no matches.
+.PP
+Each formula can be either a single number, or an algebraic combination of
+the operators exp(), log(), +, -, *, /, ^ and parentheses (). The string "inf"
+is parsed as the value infinity. Also, the 
+string "complexity" is recognized, and converted to the complexity for 
+that category 
+as reported by 
+.BR dbacl (1).
+Finally, if the 
+corresponding regular expression contains submatches delimited by parentheses, 
+their numerical values can be used inside the formulas as the special variables
+$1, ..., $9. Note that submatches which aren't numerical are converted to the value zero.
+.PP
+Case is important. Spaces and newlines can be liberally inserted. Comments 
+must start with a # and extend to the end of the line. 
+.SH USAGE
+.PP
+Typically, 
+.B bayesol 
+is used together with 
+.BR dbacl (1). 
+An invocation looks like this:
+.PP
+.na
+% dbacl -c one -c two -c three sample.txt -vna | bayesol -c toy.risk -v
+.ad
+.PP
+See @PKGDATADIR@/doc/costs.ps for a description of the algorithm used.
+See also
+@PKGDATADIR@/doc/tutorial.html for a more detailed overview.
+.SH SOURCE
+.PP
+The source code for the latest version of this program is available at the
+following locations: 
+.PP
+.na
+http://www.lbreyer.com/gpl.html
+.br
+http://dbacl.sourceforge.net
+.ad
+.SH AUTHOR
+.PP
+Laird A. Breyer <laird@lbreyer.com>
+.SH SEE ALSO
+.PP
+.BR dbacl (1), 
+.BR mailcross (1),
+.BR mailfoot (1),
+.BR mailinspect (1),
+.BR mailtoe (1),
+.BR regex (7)
+

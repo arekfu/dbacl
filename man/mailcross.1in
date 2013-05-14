@@ -1,0 +1,335 @@
+\" t
+.TH MAILCROSS 1 "Bayesian Text Classification Tools" "Version @VERSION@" ""
+.SH NAME
+mailcross \- a cross-validation simulator for use with dbacl.
+.SH SYNOPSIS
+.HP
+.B mailcross 
+.I command 
+[
+.I command_arguments 
+]
+.SH DESCRIPTION
+.PP
+.B mailcross
+automates the task of cross-validating email filtering and classification
+programs such as 
+.BR dbacl (1).
+Given a set of categorized documents, mailcross initiates simulation runs 
+to estimate the classification errors and thereby permits fine tuning 
+of the parameters of the classifier. 
+.PP
+Cross-validation is a method which is widely used to compare the quality 
+of classification and learning algorithms, and as such permits rudimentary
+comparisons between those classifiers which make use of  
+.BR dbacl (1)
+and 
+.BR bayesol (1),
+and other competing classifiers.
+.PP
+The mechanics of cross-validation are as follows: A set of pre-classified 
+email messages is first split into a number of roughly equal-sized subsets.
+For each subset, the filter (by default, 
+.BR dbacl (1)) 
+is used to classify each message within this subset, based upon having learned 
+the categories from the remaining subsets. The resulting classification errors are then averaged over all subsets.
+.PP
+The results obtained by cross validation essentially do not depend upon the 
+ordering of the sample emails. Other methods (see
+.BR mailtoe (1), mailfoot (1))
+attempt to capture the behaviour of classification errors over time.
+.PP
+.B mailcross
+uses the environment variables MAILCROSS_LEARNER and MAILCROSS_FILTER when
+executing, which permits the cross-validation of arbitrary filters, provided
+these satisfy the compatibility conditions stated in the  
+ENVIRONMENT section below.
+.PP
+For convenience, 
+.B mailcross
+implements a 
+.B testsuite 
+framework with predefined wrappers for several open
+source classifiers. This permits the direct comparison of 
+.BR dbacl (1) 
+with competing classifiers on the same set of email samples. See the USAGE section below. 
+.PP
+During preparation, 
+.B mailcross
+builds a subdirectory named mailcross.d in the current working directory. 
+All needed calculations are performed inside this subdirectory.
+.SH EXIT STATUS
+.B mailcross
+returns 0 on success, 1 if a problem occurred.
+.SH COMMANDS
+.PP
+.IP "\fBprepare\fR \fIsize\fR"
+Prepares a subdirectory named mailcross.d in the current working directory, and
+populates it with empty subdirectories for exactly 
+.I size
+subsets.
+.IP "\fBadd\fR \fIcategory\fR [FILE]..."
+Takes a set of emails from either FILE if specified, or STDIN, and 
+associates them with 
+.IR category .
+All emails are distributed randomly into the subdirectories of mailcross.d for later use. For each
+.IR category , 
+this command can be repeated several times, 
+but should be executed at least once.
+.IP "\fBclean\fR"
+Deletes the directory mailcross.d and all its contents.
+.IP "\fBlearn\fR"
+For every previously built subset of email messages, pre-learns all 
+the categories based on the contents of all the subsets except this one.
+The 
+.I command_arguments
+are passed to MAILCROSS_LEARNER.
+.IP "\fBrun\fR"
+For every previously built subset of email messages, performs the classification
+based upon the pre-learned categories associated with all but this subset.
+The 
+.I command_arguments
+are passed to MAILCROSS_FILTER.
+.IP "\fBsummarize\fR"
+Prints statistics for the latest cross-validation run.
+.IP "\fBreview\fR \fItruecat\fR \fIpredcat\fR"
+Scans the last run statistics and extracts all the messages which belong to category
+.I truecat
+but have been classified into category
+.IR predcat .
+The extracted messages are copied to the directory mailcross.d/review for perusal.
+.PP
+.IP "\fBtestsuite list\fR"
+Shows a list of available filters/wrapper scripts which can 
+be selected.
+.IP "\fBtestsuite select\fR [FILTER]..."
+Prepares the filter(s) named 
+.I FILTER
+to be used for simulation. The filter name is the name of 
+a wrapper script located in the directory 
+.IR @PKGDATADIR@/testsuite .
+Each filter has a rigid interface documented below, and the act of selecting
+it copies it to the 
+.I mailcross.d/filters 
+directory. Only filters located there
+are used in the simulations.
+.IP "\fBtestsuite deselect\fR [FILTER]..."
+Removes the named filter(s) from the directory
+.I mailcross.d/filters
+so that they are not used in the simulation.
+.IP "\fBtestsuite run\fR"
+Invokes every selected filter on the datasets added previously, and 
+calculates misclassification rates.
+.IP "\fBtestsuite status\fR"
+Describes the scheduled simulations.
+.IP "\fBtestsuite summarize\fR"
+Shows the cross validation results for all filters. Only makes sense
+after the 
+.I run 
+command.
+.SH USAGE
+.PP
+The normal usage pattern is the following: first, you should separate your email
+collection into several categories (manually or otherwise). Each category should
+be associated with one or more folders, but each folder should not contain 
+more than one category. Next, you should decide how many subsets to use, say 10. 
+Note that too many subsets will slow down the calculations rapidly. Now you can type
+.HP
+.na
+% mailcross prepare 10
+.ad
+.PP
+Next, for every category, you must add every folder associated with this
+category. Suppose you have three categories named 
+.IR spam , 
+.IR work , 
+and 
+.IR play ,
+which are associated with the mbox files 
+.IR spam.mbox , 
+.IR work.mbox , 
+and 
+.IR play.mbox 
+respectively. You would type
+.PP
+.na
+% mailcross add spam spam.mbox
+.br
+% mailcross add work work.mbox
+.br
+% mailcross add play play.mbox
+.ad
+.PP
+You can now perform as many simulations as desired. Every cross validation consists of 
+a learning, a running and a summarizing stage. These operations are performed
+on the classifier specified in the 
+MAILCROSS_FILTER and MAILCROSS_LEARNER variables. By setting these variables 
+appropriately, you can compare classification performance as you vary the 
+command line options of your classifier(s).
+.PP
+.na
+% mailcross learn
+.br
+% mailcross run
+.br
+% mailcross summarize
+.ad
+.PP
+The testsuite commands are designed to simplify the above steps and allow comparison
+of a wide range of email classifiers, including but not limited to 
+.BR dbacl .
+Classifiers are supported through wrapper scripts, which are located in the 
+.I @PKGDATADIR@/testsuite 
+directory. 
+.PP
+The first stage when using the testsuite is deciding which classifiers to compare.
+You can view a list of available wrappers by typing:
+.PP
+.na
+% mailcross testsuite list
+.ad
+.PP
+Note that the wrapper scripts are NOT the actual email classifiers, which must 
+be installed separately by your system administrator or otherwise.
+Once this is done, you can select one or more wrappers for the simulation
+by typing, for example:
+.PP
+.na 
+% mailcross testsuite select dbaclA ifile
+.ad
+.PP
+If some of the selected classifiers cannot be found on the system, they
+are not selected. Note also that some wrappers
+can have hard-coded category names, e.g. if the classifier only supports binary
+classification. Heed the warning messages. 
+.PP
+It remains only to run the simulation. Beware, this can take a long time 
+(several hours depending on the classifier). 
+.PP
+.na
+% mailcross testsuite run
+.br
+% mailcross testsuite summarize
+.ad
+.PP
+Once you are all done with simulations, you can delete the working files, log
+files etc. by typing
+.PP
+.na
+% mailcross clean
+.ad
+.PP
+The progress of the cross validation is written silently in various log files
+which are located in the 
+.I mailcross.d/log
+directory. Check these in case of problems. 
+.SH SCRIPT INTERFACE
+.PP
+.B mailcross testsuite 
+takes care of learning and classifying your prepared email corpora for each
+selected classifier. Since classifiers have widely varying interfaces, this
+is only possible by wrapping those interfaces individually into a standard 
+form which can be used by 
+.BR "mailcross testsuite" .
+.PP
+Each wrapper script is a command line tool which accepts a single command 
+followed by zero or more optional arguments, in the standard form:
+.PP
+.na
+wrapper command [argument]...
+.ad
+.PP
+Each wrapper script also makes use of STDIN and STDOUT in a well defined 
+way. If no behaviour is described, then no output or input should be used.
+The possible commands are described below:
+.IP filter
+In this case, a single email is expected on STDIN, and a list of 
+category filenames is expected in $2, $3, etc. The script writes the 
+category name corresponding to the input email on STDOUT. No trailing newline
+is required or expected.
+.IP learn
+In this case, a standard mbox stream is expected on STDIN, while a
+suitable category file name is expected in $2. No output is written to
+STDOUT.
+.IP clean
+In this case, a directory is expected in $2, which is examined for old
+database information. If any old databases are found, they are purged or
+reset. No output is written to STDOUT.
+.IP describe
+IN this case, a single line of text is written to STDOUT, describing the filter's
+functionality. The line should be kept short to prevent line wrapping on a terminal.
+.IP bootstrap
+In this case, a directory is expected in $2. The wrapper script first checks for
+the existence of its associated classifier, and other prerequisites. If the 
+check is successful, then the wrapper is cloned into the supplied directory.
+A courtesy notification should be given on STDOUT to express success or failure.
+It is also permissible to give longer descriptions caveats.
+.IP toe
+Used by 
+.BR mailtoe (1).
+.IP foot
+Used by 
+.BR mailfoot (1).
+.SH ENVIRONMENT
+.PP
+Right after loading, 
+.B mailcross 
+reads the hidden file .mailcrossrc in the $HOME directory, if it exists, so
+this would be a good place to define custom values for environment variables.
+.IP MAILCROSS_FILTER
+This variable contains a shell command to be executed repeatedly
+during the running stage.
+The command should accept an email message on STDIN and output a 
+resulting category name. It should also accept a list of category file names
+on the command line.
+If undefined, 
+.B mailcross
+uses the default value
+MAILCROSS_FILTER="dbacl -T email -T xml -v" (and 
+also magically adds the -c option
+before each category).
+.IP MAILCROSS_LEARNER
+This variable contains a shell command to be executed repeatedly during the
+learning stage. The command should accept a 
+mbox type stream of emails
+on STDIN 
+for learning, and the file name of the category on the command line. 
+If undefined, 
+.B mailcross
+uses the default value
+MAILCROSS_LEARNER="dbacl -H 19 -T email -T xml -l".
+.IP TEMPDIR
+This directory is exported for the benefit of wrapper scripts. Scripts which
+need to create temporary files should place them a the location given in TEMPDIR.
+.SH NOTES
+.PP
+The subdirectory mailcross.d can grow quite large. It 
+contains a full copy of the training corpora, as well as learning files for 
+.I size 
+times all the added categories, and various log files. 
+.SH WARNING
+.PP
+Cross-validation is a widely used, but ad-hoc statistical procedure, completely
+unrelated to Bayesian theory, and subject to controversy. 
+Use this at your own risk.
+.SH SOURCE
+.PP
+The source code for the latest version of this program is available at the
+following locations: 
+.PP
+.na
+http://www.lbreyer.com/gpl.html
+.br
+http://dbacl.sourceforge.net
+.SH AUTHOR
+.PP
+Laird A. Breyer <laird@lbreyer.com>
+.SH SEE ALSO
+.PP
+.BR bayesol (1)
+.BR dbacl (1), 
+.BR mailinspect (1),
+.BR mailtoe (1),
+.BR mailfoot (1),
+.BR regex (7)
+

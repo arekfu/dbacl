@@ -1,0 +1,29 @@
+#!/bin/sh
+# test basic dbacl -l switch with -z 1
+PATH=/bin:/usr/bin
+DBACL=$TESTBIN/dbacl
+
+prerequisite_command() {
+    type $2 2>&1 > /dev/null
+    if [ 0 -ne $? ]; then
+        echo "$1: $2 not found, test will be skipped"
+        exit 77
+    fi
+}
+
+prerequisite_command $0 grep
+
+DBACL_PATH="`pwd`/`basename $0 .sh`_`date +"%Y%m%dT%H%M%S"`"
+export DBACL_PATH
+
+mkdir "$DBACL_PATH"
+
+echo "The quick the brown brown brown fox jumped over the over lazy dog" \
+    | $DBACL -l dummy -z 1 -d | grep '^[ ]*0.000' | wc -l > "$DBACL_PATH/counts"
+
+test "`cat $DBACL_PATH/counts`" '=' "5"
+
+RESULT=$?
+rm -rf "$DBACL_PATH"
+
+exit $RESULT

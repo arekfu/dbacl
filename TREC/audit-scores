@@ -1,0 +1,75 @@
+#!/bin/sh
+# builds a list of extra scores in the audit directory.
+# initialize: $2 is working dir
+# train: $2 is correct class $3 is message file
+# finalize: 
+
+. ./share/dbacl/TREC/OPTIONS
+
+printheader() {
+    SOPT=`cat "$1/share/dbacl/TREC/OPTIONS"`
+    cat > "$1/audit/index.html" <<EOF1
+<html>
+<title>Simulation Audit</title>
+<body>
+<p>
+Simulation options:
+<pre>
+$SOPT
+</pre>
+<hr>
+<p>
+<table cols='4' width='900'>
+EOF1
+
+    cat > "$1/audit/scores" <<EOF5
+# true | verdict # confidence | class ( D(s|P) + H(s) # variance )* complexity
+EOF5
+}
+
+printfooter() {
+    FP=`cat ./audit/scores | grep 'ham spam' | wc -l`
+    FN=`cat ./audit/scores | grep 'spam.*ham' | wc -l`
+    TM=`cat ./audit/scores | wc -l`
+    cat >> ./audit/index.html <<EOF3
+</table>
+<p>
+False positives = $FP<br>False negatives = $FN<br>Total messages = $TM
+</body>
+</html>
+EOF3
+}
+
+printdata() {
+# preparations
+COUNT=`cat ./audit/COUNT`
+echo `expr $COUNT + 1` > ./audit/COUNT
+OUTFILE=`echo $2 | md5sum | sed 's/ .*$//'`
+VERDICT=`./bin/dbacl -m -U -c ./db/spam -c ./db/ham $2 2>/dev/null`
+CLASSTYPE=`expr "$VERDICT" : '\(.*\) #'`
+FULLSCORES=`./bin/dbacl -m -vU -c ./db/spam -c ./db/ham $2 2>/dev/null`
+FROM=`cat $2 | grep -m 1 '^From:' | sed 's/^.*<//;s/>.*$//'`
+
+if [ -n "$FULLSCORES" ]; then
+    echo "$1 $VERDICT $FULLSCORES" >> "./audit/scores"
+
+    # output table row
+    # note keep table row on a single line, then it is easy to grep and filter
+    cat >> "./audit/index.html" <<EOF4
+<tr><td width='50'>$COUNT</td><td width='50'>$1</td><td width='100'>$VERDICT</td><td width='200'><a href='./../$2'>$FROM</a></td><td width='500'>$FULLSCORES</td></tr>
+EOF4
+fi
+}
+
+case "$1" in
+    initialize)
+	printheader "$2"
+	echo "0" > "$2/audit/COUNT"
+	;;
+    train)
+	printdata "$2" "$3"
+	;;
+    finalize)
+	printfooter
+	;;
+esac

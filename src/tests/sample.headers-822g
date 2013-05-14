@@ -1,0 +1,20 @@
+From: George Jones<Group@Host>
+Sender: Secy@SHOST
+To: "Al Neuman"@Mad-Host,
+	Sam.Irving@Other-Host
+Message-ID:  <some.string@SHOST>
+From     :  Ken Davis <KDavis@This-Host.This-net>
+Subject  :  Re: The Syntax in the RFC
+Sender   :  KSecy@Other-Host
+Reply-To :  Sam.Irving@Reg.Organization
+To       :  George Jones <Group@Some-Reg.An-Org>,
+            Al.Neuman@MAD.Publisher
+cc       :  Important folk:
+              Tom Softwood <Balsa@Tree.Root>,
+              "Sam Irving"@Other-Host;,
+            Standard Distribution:
+              /main/davis/people/standard@Other-Host;
+Message-ID: <4231.629.XYzi-What@Other-Host>
+From:  Jones@Registry.Org
+To:    Smith@Registry.Org
+Bcc:

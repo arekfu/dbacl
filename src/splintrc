@@ -1,0 +1,44 @@
+# This is the splint config file. It lists many options which must be
+# set for splint to run properly on the dbacl sources.
+
+# we want posix checking, but not strict (see splint manual, strict
+# gives spurious warnings when we ignore return values from fprintf etc.)
+-posix-strict-lib
+-retvalint
+
+# read system header files even if we know what they contain
+# this slows parsing, but otherwise we might get an error
+# because splint is missing function prototypes (this happened
+# in Debian with ftruncate, for example)
++gnuextensions
+-skip-posix-headers
+
+-DHAVE_CONFIG_H
+
+# splint doesn't understand u_intXX_t even though it's posix
+-Du_int64_t=uint64_t
+-Du_int32_t=uint32_t
+-Du_int16_t=uint16_t
+-Du_int8_t=uint8_t
+
+# splint thinks variables that start with m_ are special, and chokes 
+# on m_options. So we disable namechecks
+-namechecks
+
+# I know what I'm doing with floating point comparisons
+-realcompare
+
+# splint has special support for boolean testing, but
+# this does not exist in older C languages and we don't want it.
+-boolops
+-pred-bool-int
+-pred-bool-others
+-booltype bool_t
+
+# splint doesn't recognize "%6.2" "f" as equivalent to "%6.2f", this is
+# a bug. I've sent a report to the splint team, but meanwhile we disable
+# the check.
+-formatcode
+
+# we're not interested in errno and which functions might change it
+-globs

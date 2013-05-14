@@ -1,0 +1,79 @@
+TREC 2005 / spam filtering track
+
+This is a description of the four dbacl filters that were submitted
+for the pilot run. Each filter is based on dbacl 1.11, and packaged as
+a standalong tar.gz file, containing the dbacl-1.11.TREC.sfx.sh script,
+this README, and an OPTIONS.default text file.
+
+To use this, simply unpack the archive and run the self extracting
+script in the directory containing the OPTIONS.default file. This
+will unpack the initialize and classify scripts. Then you can
+run the spamjig scripts to perform all the remaining work.
+
+dbacl needs a standard gcc build environment to compile but no 
+special libraries. 
+
+--------------------------
+DESCRIPTION OF PILOT RUNS
+--------------------------
+
+breyerSPAMp1cefhuj.tar.gz
+
+This filter tests the cef tokenizer with full standard header analysis
+and uniform reference measure, case sensitive tokens.
+
+breyerSPAMp2adphu.tar.gz
+
+This filter tests the adp tokenizer with full standard header analysis
+and uniform reference measure, lowercase tokens.
+
+breyerSPAMp3adphd.tar.gz
+
+This filter tests the adp tokenizer with full standard header analysis
+and dirichlet reference measure, lowercase tokens.
+
+breyerSPAMp4adp.tar.gz
+
+This filter tests the adp tokenizer with only Subject analysis,
+uniform reference measure, lowercase tokens.
+
+
+==> OPTIONS.1cefhuj <==
+# these settings are interesting for the SA corpus
+DBACL_LOPTS='-H 25 -1 -T email -T email:headers -T email:theaders -T html:links -T html:alt -L uniform -e cef -j'
+DBACL_COPTS='-nv'
+DBACL_CHAM='ham[ ]*\([^ ]*\)'
+DBACL_CSPAM='.* spam[ ]*\([^ ]*\)'
+DBACL_SGN=''
+
+==> OPTIONS.2adphu <==
+# these settings are interesting for the SA corpus
+DBACL_LOPTS='-H 25 -1 -T email -T email:headers -T email:theaders -T html:links -T html:alt -L uniform -e adp'
+DBACL_COPTS='-nv'
+DBACL_CHAM='ham[ ]*\([^ ]*\)'
+DBACL_CSPAM='.* spam[ ]*\([^ ]*\)'
+DBACL_SGN=''
+
+==> OPTIONS.3adphd <==
+# these settings are interesting for the SA corpus
+DBACL_LOPTS='-H 25 -1 -T email -T email:headers -T email:theaders -T html:links -T html:alt -L dirichlet -e adp'
+DBACL_COPTS='-nv'
+DBACL_CHAM='ham[ ]*\([^ ]*\)'
+DBACL_CSPAM='.* spam[ ]*\([^ ]*\)'
+DBACL_SGN=''
+
+==> OPTIONS.4adp <==
+# these settings are interesting for the SA corpus
+DBACL_LOPTS='-H 25 -1 -T email -T email:noheaders -L uniform -e adp'
+DBACL_COPTS='-nv'
+DBACL_CHAM='ham[ ]*\([^ ]*\)'
+DBACL_CSPAM='.* spam[ ]*\([^ ]*\)'
+DBACL_SGN=''
+
+----------------------------
+DESCRIPTION OF OFFICIAL RUNS
+----------------------------
+
+The enron pilot run was not very useful as a way of choosing
+interesting options for the official run, so the pilot packages will
+be repeated as-is.

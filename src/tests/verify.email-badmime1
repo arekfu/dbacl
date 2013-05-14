@@ -1,0 +1,99 @@
+From: eric.n.dunn@bankofamerica.com
+To: Deb Hazarika <dhazarika@zeomega.com>
+Cc: zope@zope.org
+Message-id: <86256BF9.007E3E16.00@notes.bankofamerica.com>
+Content-type: multipart/mixed
+Subject: [Zope] Re: BITS
+Sender: zope-admin@zope.org
+Content-type: text/plain
+Content-disposition: inline
+(Embedded image moved to file: pic12055.pcx)
+(Embedded image moved to file: pic30813.pcx)
+Set as Projectmanager.. temamanager etc...
+(Embedded image moved to file: pic17450.pcx)
+"View"
+None of the screens allow me to start a Project
+Am I missing a dependency?
+Zope 2.5.0 on Debian
+Eric Dunn
+Deb Hazarika <dhazarika@zeomega.com> on 07/17/2002 05:05:58 PM
+To: Eric N. Dunn/USA/BAC@BankofAmerica
+cc: sam@zeomega.com
+Subject: BITS
+Hello Eric,
+Sorry for not providing a document along with the product,
+actually i am working on the documents and soon it will be available for
+download.
+As of now i can help you out with some basic instructions:
+1) Initiate a BITS instance in your ZMI.
+2) BITS will by default have an acl_users folder within it, If you don't
+want to use it and use the existing users in a acl_users folder at it's top
+then please
+ delete the acl_users folder within BITS.
+3) Set the role Projectmanager to the users whom you want to give the
+ability to add project
+4) Set the roles (Developer,Teammember) or (Developer,Teamleader) to those
+users who are going to participate in BITS.
+Now you are ready with the configurations. Go to the view tab of bits and
+create a project with a projectmanager and some team member.
+And then you can keep adding and tracking BUGS in this project.
+All the best
+Cheers
+DEB
+Content-type: text/html; name=att1.htm
+Content-disposition: attachment
+Content-description: Internet HTML
+Hello Eric,
+ 
+Sorry for not providing a document along with the 
+product,
+actually i am working on the documents and soon it 
+will be available for download.
+ 
+As of now i can help you out with some basic 
+instructions:
+ 
+1) Initiate a BITS instance in your 
+ZMI.
+ 
+2) BITS will by default have an acl_users folder 
+within it, If you don't want to use it and 
+use the existing users in a acl_users folder at it's top then please 
+ delete the acl_users folder 
+within BITS.
+ 
+3) Set the role Projectmanager to the users whom 
+you want to give the ability to add project
+ 
+4) Set the roles (Developer,Teammember) or 
+(Developer,Teamleader) to those users who are going to participate in 
+BITS.
+ 
+Now you are ready with the configurations. Go to 
+the view tab of bits and create a project with a projectmanager and some team 
+member.
+And then you can keep adding and tracking BUGS in 
+this project.
+ 
+All the best
+ 
+Cheers
+DEB
+ Content-type: text/html; name=pic12055.pcx
+Content-disposition: attachment
+Content-description: Internet HTML
+Content-type: text/html; name=pic30813.pcx
+Content-disposition: attachment
+Content-description: Internet HTML
+Content-type: text/html; name=pic17450.pcx
+Content-disposition: attachment
+Content-description: Internet HTML
+_______________________________________________
+Zope maillist - Zope@zope.org
+http://lists.zope.org/mailman/listinfo/zope
+** No cross posts or HTML encoding! **
+(Related lists - 
+ http://lists.zope.org/mailman/listinfo/zope-announce
+ http://lists.zope.org/mailman/listinfo/zope-dev )
+
+

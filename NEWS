@@ -1,0 +1,159 @@
+dbacl NEWS -- history of user-visible changes. From August 2004.
+Copyright (C) 2004-2012 Laird Breyer.
+
+dbacl 1.14.1
+
+This release changes the default settings to allow up to 16384 categories,
+and fixes some other limits in line with modern standards.
+
+dbacl 1.14
+
+Bugfix release. No user visible changes.
+
+dbacl 1.13
+
+The new -P switch is intended to help with "unbalanced" training
+corpora. When one category has much more training data than another,
+there is an implicit bias in the likelihood scores that are output by
+dbacl, which causes the optimal classification threshold to shift.
+The -P switch adds a Poisson prior distribution on the document length,
+which should normally be an improvement, but possibly too small to notice.
+Note this only works with the -T email switch.
+
+This could also be done more generally with the bayesol(1) utility, but
+it is more convenient to have the -P switch, because the prior can be 
+adjusted dynamically from the category files.
+
+The -U switch, which computes an uncertainty score (more precisely,
+how unambiguous the best category is), now uses a different formula.
+The meaning is the same as before, 100% means dbacl is sure of its
+choice, 0% means it's unsure. The new formula attempts to better
+represent the amount of uncertainty present during a classification,
+and is based on the token hit rates as well as the category scores as
+before.
+
+The -O switch is a generalization of the -o switch. With -O, dbacl can
+read several online learning files (each created with -o) and combine
+them. These switches are only useful for simple forms of incremental 
+learning, for example -o is used in the TREC scripts.
+
+dbacl 1.12
+
+Added the "Can spam filters play chess?" essay to the bundled documentation,
+look in the doc/chess directory. Added the TREC2005 options files to the 
+TREC directory. Fixed some parsing bugs.
+
+There now is a new parser "-e char" which parses single characters. This
+isn't useful on its own, but together with the -w switch this allows fast
+construction of character n-gram models up to order 7. Note that you could
+simply use a series of regular expressions to generate n-grams, but this
+way doesn't have the regex overhead.
+
+dbacl 1.11
+
+For some reason which appears to be a typo, the signal handling code
+was disabled, but now works as advertised.
+
+The score calculations now do renormalization slightly differently,
+and document complexities are also changed from integers to reals.
+This should be practically unnoticeable for simple models, but for
+divergences and complexities of n-gram models it will be, although the
+impact is minor asymptotically for large complexity. This change
+allows more meaningful direct comparisons between models based on
+widely differing tokenization schemes, ie in principle it allows
+comparing a category which is based solely on alphabetical word tokens
+with another category which is based solely on numbers, for
+example, even though they don't compare similar tokens. 
+Which is not to say that you should do it. You're safe if you
+always learn all your categories with exactly the same set of model
+switches.
+
+When using the -w switch, complex tokens no longer continue past
+the end of a line and onto the next one. This is more consistent
+with other switch behaviours, and you can force n-grams to straddle
+newlines by using the -S switch.
+
+When using the -o and -m switches together, some extra memory mapping
+is now performed. This is useful for keeping the mapped pages
+invariant for the TREC tests, but doesn't help in speeding up the
+simulation.
+
+DISCUSSION
+
+In the spamjig run [which performs classify/learn for every input
+document], after all pages are locked into place, about 90% of the cpu
+time is spent optimizing the weights [by contrast, in ordinary use,
+about 70% of the running time is reading and parsing input].  The only
+way I can see to improve the cpu bottleneck is to exploit symmetries
+and compression techniques. However, this can't be done without
+changing the learner hash structure, which must be thought through
+carefully [and won't be done soon]. As an added benefit, doing this
+correctly should imply much reduced memory requirements during
+learning.
+
+dbacl 1.10
+
+A new TREC directory contains the necessary scripts and instructions
+for running dbacl in the TREC/spam testing framework (spamjig).
+
+The mail body parser was tweaked, so it no longer ignores the preamble
+before the first MIME section. This goes against RFC 2046 (p.20)
+recommendations, but if a spammer uses it, there's got to be a reason.
+So now we also parse the preamble (can be disabled, see
+IGNORE_MIME_PREAMBLE).
+
+The -0 switch is now always on by default. Recall that its purpose is
+to prevent weight preloading if the category file already
+exists. Weight preloading speeds up the learning operation by starting
+with the last known set of weights for the category. It's a nice idea,
+but can cause trouble if the old category feature list is much different
+from the new feature set to be learned. In particular, if you leave
+an old category named "dummy" on your system, and months later you decide
+to learn an unrelated category also named "dummy"...
+
+Preloading must now be explicitly enabled with the new -1 switch if
+you want to experiment with it.
+
+The -g switch now scans a given regular expression for captures
+(parentheses), and surrounds the expression with a single capture if
+none were found as a convenience. The -g switch is powerful, but hard to
+explain:
+
+Many unix tools use regular expressions. Such an expression normally
+matches a substring in the input, but if it also contains parentheses,
+then whatever is inside those parentheses is "captured". So the
+expression 'Hello .*' matches the string "Hello Fred", but the
+expression 'Hello (.*)' both matches "Hello Fred" and also captures
+"Fred". In dbacl, the -g switch lets you construct tokens from
+captured expressions, but a corollary is that if you don't supply a
+capture expression, then dbacl won't read any tokens at all! As a convenience,
+if no parentheses exist, dbacl will now add some. Thus the command line switch
+
+	-g 'Hello .*'       is converted to	-g '(Hello .*)'
+but     -g 'Hello (.*)'     is left untouched.
+
+
+dbacl 1.9
+
+The categories are now "portable" by default, unless the architecture
+prevents it. Portable categories are stored in network byte order,
+and data is converted on the fly when needed. The switch had been
+disabled in version 1.8.1 by mistake.
+
+A new command hforge is available. It scans an email header and checks
+for signs of forgery.
+
+dbacl 1.8.1
+
+This is the first version of dbacl which includes a NEWS file. 
+This was forced at the GNU autotools insistence, and the author
+is not responsible for the contents ;-).
+
+dbacl now makes better use of the autotools, due in no small part
+on liberal doses of RTFM. The most important aspect is the new
+self-test suite, which can be invoked via make check. Other changes
+in dbacl for this release are mainly bugfixes and code cleanup. 
+The -g and -i switches are now incompatible until further redesign.
+
+The only other user-visible change is a new -m switch, which can speed
+up repeated classifications tremendously.

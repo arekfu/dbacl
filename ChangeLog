@@ -1,0 +1,236 @@
+dbacl 1.14.1:
+	* changed defaults in dbacl.h to allow 16384 categories (thanks Johannes Gerer)
+	* compile using std=c99
+dbacl 1.14:
+	* cleanup tempfiles in recalculate_reference_measure (thanks Marcin Mirosław)
+	* removed spherecl code (failed experiment).
+dbacl 1.13:
+	* updated licence from GPL2 to GPL3.
+	* new classifier command spherecl (unfinished, unusable). 
+	* new -Y switch.
+	* fine grained Mheaderid used for expanded token classes.
+	* rearrange options bitfield to make room for extra choices. 
+	* new formula used for -U score.
+	* new -O switch. Updated man page.
+	* new -z switch.
+	* fixed compile problems in HPUX (thanks to Frank Spaniak).
+	* new -F switch for classifying several files per invocation.
+	* new checkpoint and restart scripts in the TREC directory.
+	* extra debug information for -d switch.
+dbacl 1.12:
+	* some tests in make check need C locale (found by Szperacz).
+	* swap order of #include "util.h" and #include<math.h> for gcc 4.0
+	* defined dummy yywrap() in risk-parser.y
+	* added the TREC2005 options files to the distribution.
+	* when using -T html:styles, now also shows CSS class.
+	* bug fix: some MMAP calls incorrectly tested NULL instead of MAP_FAILED.
+	* bug fix: std_tokenizer lost tokens with M_OPTION_NGRAM_STRADDLE_NL.
+	* bug fix: xml_character_filter, XTAG attributes straddling newlines.
+	* changed -T email:xheaders semantics slightly.
+	* re-added EXIT_STATUS section in man page (was lost after rewrite).
+	* fixed exit status when learning, to conform with Unix convention,
+	  but classifying exit status continues to be nonstandard.
+	* new option -e char for single characters.
+	* updated code in mailinspect.c so that it compiles with slang2.
+	  (thanks Clint Adams)
+	* changed util.h and tests/Makefile.am for IRIX make compilation.
+	  (thanks to anonymous submitter)
+	* todo: find unchecked null pointers
+	* todo: fix flex linking problem
+	* new hypex command, a Chernoff exponent calculator for dbacl.
+	* optionally scan sources with splint (tricky, incomplete)
+	  (thanks to Markus Elfring for pointing out the need for it).
+dbacl 1.11:
+	* bug fix in mailcross.
+	* bug fix: SIGACTION changed to HAVE_SIGACTION.
+	* add slowdown warning on STDERR when learner hash won't grow any more.
+	* set extra_lines = 0 in process_file when U_OPTION_FILTER applies.
+	* add new switch -S to be used with -w, and make -w more standard.
+	* replace tmpfile() call with mytmpfile() + unlink().
+	* change the formula for score renormalizations and make complexity
+	  into a fractional quantity.
+	* update/edit the manpages and tutorials.
+        * add new function fast_partial_save_learner().
+dbacl 1.10:
+	* small changes to the documentation.
+	* add new TREC directory containing spamjig scripts.
+	* apply vpath changes, thanks to Clint Adams, see contrib directory.
+	* change is_binline() to be more robust across locales.
+	* bug fix in test scripts in case program doesn't run in C locale.
+	* -m switch now applies to learning with -o switch.
+	* add "b" to all the fopen() calls, including stdin handling.
+	* fix typos and updated documentation (thanks Keith Briggs).
+	* bug fix: add check for q = NULL pointer in std_tokenizer.
+	* implicit parentheses around regexes with -g switch.
+	* -0 switch is now default, added -1 switch to force preloading.
+	* -X switch no longer default for learning.
+	* convert some E_ERROR messages into E_FATAL.
+	* remove hacks in make_dirichlet_digrams(), agrees with dbacl.ps again.
+	* bug fix: handle style attribute in XTAGS if M_OPTION_SHOW_STYLE.
+	* parsing improvement: detect MIME headers with missing boundary.
+	* loophole fix: IGNORE_MIME_PREAMBLE in mbw.c.
+dbacl 1.9:
+	* bug fix: bayesol expects '^scores', dbacl writes '^# scores', found
+	  by Darryl Luff (thanks).
+	* dbacl -l now accepts directory names as well as mboxes.
+	* add new -U switch, to measure MAP ambiguity.
+	* change "n/a" type confidence value (-X switch) from 101 to 0,
+	  which is friendlier to mailinspect.
+	* bug fix: -vnX displayed wrong percentage.
+	* new hmine command.
+	* add two new scoring types in mailinspect (-o switch).
+	* fix interactive compilation of mailinspect, which got broken by
+	  previous automake redesign.
+	* new -T email:theaders option.
+	* bug fix: portable categories had been disabled in dbacl.h
+dbacl 1.8.1:
+	* reformat output scores.
+	* fix -d switch to work during classification.
+	* new -m switch to speed up learning/classifying.
+	* bug fix: is_adp_char/is_cef_char was buggy, now ok + more modular.
+	* stop printing control codes with -D and -d switches.
+	* handle RFC 1153 format.
+	* add -T html:forms switch.
+	* bug fix: add extra newlines to input and flush filter caches.
+	* bug fix: uri encoding.
+	* bug fix: message/rfc822 mime type.
+	* where possible, write portable (byte order) category files.
+	* new make check autotest scripts (finally!).
+	* standardize error messages a bit more.
+	* rework automake system (after doing teh RTFM).
+	* remove boost regex code.
+	* move some common functions to new file util.c.
+	* fix bug in get_token_type() when MBOX mode is off.
+	* redesign the process_file() functions, fixing bugs.
+	* limit single token sizes to prevent numeric overflows in digitization.
+	* replace wcsncasecmp with mystrncasecmp as former is broken on glibc. 
+	* cosmetic change to "summarize" testsuite commands.
+dbacl 1.8:
+	* revise dbacl.ps: fixes typos (thanks to Keith Briggs) and brings
+	  theory up to date.
+	* change html:links option to display full unparsed url.
+	* email mode now defaults to -e adp and -L uniform, unlike previous
+	  version, whose behaviour can be obtained with -e cef -L dirichlet.
+	* new -e switch parameter (adp).
+	* new support for token classes. Not used much for now.
+	* rework reference measure estimations, modified -L switch.	
+	* change default model policy from multinomial to hierarchical. To
+	  obtain multinomial from now on, -M must always be used.
+	* add _GNU_SOURCE to shut up posix_memalign warnings on Linux.
+	* bug fix: decode_html_entity. This function just keeps bugging me. 
+	* fix slightly the handling of HTML comments.
+	* fix some more options/bugs in the testsuite wrappers.
+	* bug fix: in digitizing digrams, because format has changed.
+dbacl 1.7:
+	* add -q switch to control learning quality/speed.
+	* rework entropy optimization to reduce variability, and preload
+	  weights if category already exists (-0 switch).
+	* improve buffering behaviour when using -f switch. Discovered
+	  by Yoav Aner. 
+	* add signal handlers with notification to stderr.
+	* add new costs.ps document describing the bayesol cost calculations.
+	* add new -N switch to bayesol.
+	* add basic "plot" commands for mailtoe/mailfoot (needs gnuplot).
+	* add new -o switch. Useful for faster mailtoe/mailfoot simulations.
+	* modify -x switch to skip full messages when used with -T "email" .
+	* add madvise calls for hash tables.
+	* bug fix: memset address was wrong in grow_learner_hash().
+	* bug fix: more robust quote parser inside xml tags. Discovered
+	  by spammers. Thanks, whoever you are ;-)
+	* saving category files is now atomic, and cannot be corrupted.
+	* save category files with 440 permissions only.
+	* remove some deprecated bogofilter wrappers.
+	* forgot to check sscanf return values. 
+	* bug fix: no plain_text_filter() for non-plaintext body parts.
+	* bug fix: decode_html_entity.
+	* bug fix: use 64 bit hashes when defining "huge" memory model.
+	* fix dbacl display bug with -N switch and single category.
+dbacl 1.6:
+	* add new testsuite wrappers for crm114, SpamAssassin, SpamOracle.
+	* new autoconf check for wcstol (in case C library is incomplete). 
+	  Thanks to Marian Steinbach.
+	* new mailtoe and mailfoot commands similar to mailcross.
+	* merge the mailcross and mailcross.testsuite commands, and invert 
+	  their exit codes to get normal shell conventions.
+	* new -T switch to scan attachments somewhat like strings(1).
+	* fix a crash in mailinspect when viewing mailboxes with more than
+	  1024 messages.
+	* remove "growing hashtable" warning - it's distracting and useless.
+dbacl 1.5.1:
+	* fix a trivial, but serious bug: mail messages were not parsed
+	  if they didn't start with From_.
+	* streamline html entity decoding inside XTAGS
+	* add new testsuite wrapper script for popfile (tested with 0.20.1 only).
+	* cosmetic changes to the testsuite scripts (e.g. /bin/sh --> /bin/bash
+	  everywhere, at least until the scripts become truly portable).
+dbacl 1.5:	
+	* new mailcross.testsuite command.
+	* use poor man's templates (in mbw.c) for parsing functions. 
+	* add several new -T switches.
+	* completely rework the xml filter.
+	* add new base64 and quoted-printable decoders.
+	* fix hang bug with signed chars during learning.
+	* fix bugs in mbox parser. 
+	* slight reorganization and new features in mailcross.
+	* make digramic transitions semireversible.
+	* rework email.html tutorial.
+	* invert the readline and ncurses tests in configure.in
+dbacl 1.4:
+	* add the -mieee switch on Alpha processors 
+	  (to prevent incorrect divide by zero errors - we use IEEE fp).
+	* add a tutorial for email classification.
+	* add dependency on ncurses to satisfy libreadline, following
+	  a suggestion by Christian Loitsch.
+	* change slightly the bayesol risk calculation and parse risk
+	  spec costs directly on log scale.
+	* add an -e switch to replace alpha character class tokenization.
+	* add a -L switch to replace digramic measure with Laplacian measure. 
+	* add -fsigned-char compilation switch to Makefile.in for portability. 
+	  Discovered by Kerry Todyruik.
+	* change slightly the mbox/MIME parsing algorithm to fix
+	  bugs where Base64 encoded attachements aren't skipped.
+	* change some of the sample*.txt files to preempt copyright issues,
+	  following a suggestion by Johannes Huesing.
+	* fix misplaced post_line_fun() call in *process_file().
+	* use AC_FUNC_MBRTOWC in configure script instead of 
+	  manually checking headers.
+dbacl 1.3.1:
+	* add basic vi cursor key support in mailinspect.
+	* don't pack structs if not GNU C compiler.
+	* remove hh modifier in fprintf calls.
+	* disable wide character support for BSD style machines. 
+	* fix solaris compilation problem with sys/types.h. Thanks to
+	  Wes Groleau for pointing out the bug.
+	* fix a typo in tutorial.
+	* fix for gcc-3.x compilation problem. '^M' is now '\r'. Thanks to 
+	  Mike Frysinger <vapier@gentoo.org>
+dbacl 1.3:	
+	* add a paragraph to the README
+	* dbacl now counts the number of emails found during learning.
+	* mailinspect permits (interactively) sorting an mbox by category
+	* refactored functions to allow sharing in dbacl.c and mailinspect.c
+dbacl 1.2.1:	
+	* new -H switch allows dynamically growing hash tables during learning
+	* bayesol now warns if complexities are disparate + warning in tutorial
+	* new command mailcross to perform cross validation
+	* new -A switch as a companion for -a switch
+	* remove empirical.track_features limitation on line length
+dbacl 1.2:
+	* add simple-minded feature decimation for memory-constrained operation
+	* add new Bayes solution calculator (bayesol)
+	* add a tutorial
+dbacl 1.1:
+	* add handler for regex submatch bitmaps.
+	* add a new dump model switch (-d).
+	* add new code for hierarchical type models (incl. -w switch). 
+	* speed up hash macros
+	* insert typedefs for fine grained portability control.
+	* reformat the usage strings.
+	* properly separate components in n-grams.
+	* document the theoretical aspects of the design.
+dbacl 1.0:
+	* add support for regular expressions
+	* add support for internationalization
+	* fix a bug (miscalculation of lambdas) in previous version. 
+dbacl 0.9:
+	* initial stable release.

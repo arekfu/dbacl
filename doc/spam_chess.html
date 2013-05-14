@@ -1,0 +1,1672 @@
+<html>
+<header>
+<title>Can a Bayesian spam filter play chess?</title>
+</header>
+<body>
+<h1>Can a Bayesian spam filter play chess?</h1>
+<center>by Laird A. Breyer</center>
+<p>
+<h2>Introduction</h2>
+<p>
+Many people these days depend on Bayesian filters to
+protect them from the ever present email scourge that is spam.
+Unlike older technologies, these programs' claim to fame is that
+they <i>learn</i> the spam patterns automatically, and more importantly,
+learn <i>personalized</i> spam (bad) and ham (good) email patterns. 
+<p>
+Like many others, I wrote a Bayesian filter to protect me from unwanted
+email, which I called <a href="http://dbacl.sourceforge.net"><i>dbacl</i></a>.
+My implementation functions as a Unix command line text classifier,
+with special email support, and can be used with procmail.
+<p>
+People are often astonished at how well statistical mail filtering works
+after they first try it, and it's tempting to imagine that such programs
+actually understand the emails being delivered, rather than merely matching
+patterns.
+<p>
+Now <a href="http://www.fide.com/official/handbook.asp?level=EE101">chess</a> 
+has always been a popular gauge of intelligence that everyone
+can understand, so if we put all these ideas together, 
+then the question "Can a Bayesian spam filter play chess?"
+seems like a fun experiment with a lot of appeal.
+<p>
+Let's put down some ground rules: This experiment will test a real spam filter, not a specially designed chess program. It won't aim to beat 
+<a href="http://www.research.ibm.com/deepblue/"><i>Deep Thought</i></a>
+(I wouldn't know where to start, and I have a feeling this could be difficult anyway ;-), but it will aim to show signs of "intelligence", or we won't claim
+success.
+Finally, since dry tables and graphs are no fun, a theoretical proof of concept is not enough: 
+the spam filter must <i>really</i> play chess
+in a way that everyone can see, and try out at home.
+<p>
+The account below is designed so that you can follow and duplicate 
+it by yourself. All
+you need is a Unix compatible computer. You'll have to open a terminal
+and be ready to type shell commands. All shell commands below are preceded
+by % to indicate the prompt, but you don't type the '%'.
+ Instructions are fairly detailed, and 
+various scripts can be downloaded when needed, but it helps if you're
+familiar with the shell. Ask a friend if you need help.
+<p>
+<b>Important: You must follow these instructions if you want to actually play chess
+against the spam filter. You must also download some training games and
+teach the filter beforehand. Running the scripts alone is not enough.
+The instructions below have been tested to work with the GNU utilities and
+<i>bash</i>.
+</b>
+<p>
+Start by making a directory to keep all the
+workings in one place.
+<pre>
+% mkdir chess
+% cd chess
+</pre>
+<p>
+<h2>Setting up the game(s)</h2>
+<p>
+The first thing we have to do is obtain a (preferably large) collection
+of chess games that we can learn. 
+<p>
+Not being an expert, I started off by
+browsing the web for likely keywords. It became soon apparent that a large
+collection of free games is available electronically in something called the
+PGN format. So I ended up downloading all the files available from 
+<a href="http://www.chessopolis.com/chessfiles/pgn_collections.htm">Chessopolis</a> and placing them into a subdirectory.
+<p>
+<pre>
+% mkdir zipfiles
+% cd zipfiles
+% ls
+100-pg.zip    can92-pg.zip  gmcom3pg.zip  krp-pg.zip    swede2pg.zip
+4queenpg.zip  cp8687pg.zip  irish-pg.zip  lonepine.zip  ten-pg.zip
+acbul-pg.zip  cp8891pg.zip  italy-pg.zip  maxg-pgn.zip  trap-pg.zip
+bril-pg.zip   croat-pg.zip  kbp-pg.zip    minis-pg.zip  wchamppg.zip
+brit60pg.zip  denm-pg.zip   knp-pg.zip    pca9395.zip
+brit70pg.zip  gmcom1pg.zip  kp-kp-pg.zip  sams-pg.zip
+cal-pg.zip    gmcom2pg.zip  kqp-pg.zip    storm-pg.zip
+</pre>
+<p>
+Now that we have a collection, let's look at a typical game, say from 
+<i>sams-pg.zip</i>:
+<pre>
+% zcat sams-pg.zip | head -15
+[Event "?"]
+[Site "Active Chess Championship, Kuala Lumpur (Malays"]
+[Date "1989.??.??"]
+[Round "?"]
+[White "Anand Viswanathan (IND)"]
+[Black "Sloan Sam"]
+[Result "1-0"]
+[ECO "C57"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bc4 Nf6 4. Ng5 Nxe4 5. Bxf7+ Ke7 6. d3 Nf6 7. 
+Bb3 d5 8. Nc3 Bg4 9. f3 Bf5 10. f4 Bg4 11. Qd2 h6 12. fxe5 Nxe5 13. Qe3 
+Kd6 14. d4 Nd3+ 15. Qxd3 Qe7+ 16. Be3 Re8 17. Nf7+ Qxf7 18. O-O c6 19. 
+Bf4+ Kd7 20. Be5 Be7 21. Rae1 Rhf8 22. Nxd5 cxd5 23. Ba4+ Kd8 24. Qc3 
+Bb4 25. Qxb4 Re6 26. c4 Rb6 27. Qa5 Bc8 28. c5 1-0
+
+</pre>
+<p>
+The trouble with data collections is that they are never exactly in the format
+we want. The chess game is obviously the bit at the bottom, while the
+text in square brackets looks quite useless to teach our filter. 
+<p>
+Looking at the game itself, the numbers obviously count the moves,
+while the actual symbols that follow just seem like noise. But look
+more closely, and each move is actually followed by two expressions,
+one for each player. 
+<p>
+In chess, the White player always starts first,
+and if you know that a chess board's columns are marked by letters,
+and the rows are marked by numbers, then e4 is a square on the board.
+The capital letters such as B, N, Q, K probably stand for Bishop,
+kNight, Queen and King. Of course, if you get stuck, you might just
+want to read the <a href="http://www.tim-mann.org/Standard">PGN format specification</a> instead of guessing.
+<p>
+So now we know that each player's moves are separated by spaces, and 
+that the numbers ending in a dot are just there to help people read the
+moves, and can be ignored just like the text in brackets with the names
+of the players etc. The real game information could be simply written like this:
+<pre>
+e4 e5 Nf3 Nc6 Bc4 Nf6 Ng5 Nxe4 Bxf7+ Ke7 d3 Nf6 
+Bb3 d5 Nc3 Bg4 f3 Bf5 f4 Bg4 Qd2 h6 fxe5 Nxe5 Qe3 
+Kd6 d4 Nd3+ Qxd3 Qe7+ Be3 Re8 Nf7+ Qxf7 O-O c6 
+Bf4+ Kd7 Be5 Be7 Rae1 Rhf8 Nxd5 cxd5 Ba4+ Kd8 Qc3 
+Bb4 Qxb4 Re6 c4 Rb6 Qa5 Bc8 c5 1-0
+</pre>
+<p>
+<h2>The engine's brain</h2>
+<p>
+<a href="http://dbacl.sourceforge.net"><i>dbacl</i></a> is a text classifier. It reads words and builds a probability model
+from their frequencies. It can also look at pairs of words, triples, etc. up
+to 7. The tokens it looks at can be up to 30 characters long. These limitations
+are technical and would take too long to explain, but are useful to know up front.
+<p>
+What happens when <i>dbacl</i> classifies a text is that it computes the
+probability of seeing the text naturally occurring under the
+model. This is how spam filtering works: we build two models, one for
+spam and one for good emails, and then <i>dbacl</i> checks which model
+probability is higher for every incoming email. 
+<p>
+Before we go on, 
+make sure that <i>dbacl</i> is available. You'll need version 1.11 at least, so
+the easiest way is to download the program from its homepage. Place the
+dbacl-1.11.tar.gz file in your <i>chess</i> directory.
+<pre>
+% cd ..
+% tar xfz dbacl-1.11.tar.gz
+% mv dbacl-1.11 dbacl
+% cd dbacl
+% ./configure && make && make check
+% cd ..
+</pre>
+<p>
+For chess, we first want to learn a model from many, many games. But
+then what? If we play an actual game, we'll end up with another piece
+of text that looks like the game above, but it will be incomplete. And
+we want <i>dbacl</i> to choose each move for the side it plays.
+<p>
+Now <i>dbacl</i> doesn't know the rules of chess, in fact anybody would be
+hard pressed to recognize that the text above is actually a game
+played on a board with wooden or plastic pieces. Anybody who has never
+heard of PGN of course.
+<p>
+What <i>dbacl</i> can do is <i>choose</i>. So here's what we will do: we 
+take an incomplete game, and we add one extra (half) move at the end ourselves.
+We repeat this for all possible legal moves at that point. We'll get
+nearly identical partial games whose only difference is the last expression.
+We'll ask <i>dbacl</i> to work out the probabilities of each partial game under
+its model. And then we'll pick the most likely partial game.
+
+<p>
+<h2>Figuring out what to learn</h2>
+<p>
+We know that <i>dbacl</i> can tell us if a piece of text is <i>typical</i> for
+a model, and in turn a model is learned by reading many examples together.
+So if a pattern occurs very often in the games being learned, then such
+a typical pattern will be recommended by <i>dbacl</i>. And if the pattern is rare
+then <i>dbacl</i> will recommend it rarely.
+<p>
+But we want <i>dbacl</i> to win. So we want it to recommend the kind of things
+winners often do. So when <i>dbacl</i> plays White, it must learn a model
+from games where White wins, and if <i>dbacl</i> plays Black, then its model must
+be from games where Black wins. 
+<p>
+At least that's a good first assumption. Sometimes, strong players lose a game
+against weaker players, and if <i>dbacl</i> learns this type of game, then it
+will pick up bad habits from the weaker player. But we'll assume that most
+games the better player wins. Also, if we learn to play by studying games
+from terrible players, then we'll pick up bad habits no matter what. 
+But this is for later, or we'll never get anywhere.
+<p>
+Unfortunately, we now have work to do. We must split our thousands of
+sample games into White-Win (1-0) and Black-Win (0-1). And what to do
+about draws (1/2-1/2)? We can put them in both categories or just ignore them.
+<p>
+The files I downloaded are zipped MS-DOS files called *.PGN whose lines end in "\r\n"
+instead of ending in "\n", which is the Unix convention. 
+<pre>
+% cd zipfiles
+% for f in *.zip; do unzip $f; done
+% mkdir ../gamefiles
+% mv *.PGN ../gamefiles
+% cd ..
+</pre>
+<p>
+After inspecting a few *.PGN files, it's clear that
+a typical game takes several lines to write out fully,
+but the lines in between are either empty or contain all sorts of comments
+and useless information which must be scrubbed. We can do this by recombining
+the lines of a game into a single long line, and since all games start
+with a "1.", any lines left that don't start this way can be thrown away.
+<pre>
+% cd gamefiles
+% cat *.PGN  | sed -e 's/\r//g' \
+  | sed -e :a -e '$!N;s/\n\([a-hKQNBRO0-9]\)/ \1/;ta' -e 'P;D' \
+  | sed -e 's/^ *//' \
+  | grep '^1\.' \
+  > allgames.txt
+</pre>
+<p>
+What we now have is a big file <i>allgames.txt</i> which contains very long lines
+where each line is a single game. In the PGN format, the end result is
+marked at the end of the game, so it is easy for us to sort the games 
+by throwing away the lines which either contain 1-0 (White wins) or 0-1 (Black wins). We also remove the move numbers which we don't need anymore.
+<pre>
+% cat allgames.txt | grep -v '0-1' | sed 's/[0-9]*\.[ ]*//g' > WhiteWinDraw.txt
+% cat allgames.txt | grep -v '1-0' | sed 's/[0-9]*\.[ ]*//g' > BlackWinDraw.txt
+% cat allgames.txt | grep '1-0' | sed 's/[0-9]*\.[ ]*//g' > WhiteWin.txt
+% cat allgames.txt | grep '0-1' | sed 's/[0-9]*\.[ ]*//g' > BlackWin.txt
+</pre>
+Let's see how many games we've got:
+<pre>
+% wc -l *.txt
+   46245 allgames.txt
+   26809 BlackWinDraw.txt
+   14913 BlackWin.txt
+   31332 WhiteWinDraw.txt
+   19436 WhiteWin.txt
+  138735 total
+</pre>
+All right, around 15-20 thousand winning games of each type.
+That should give <i>dbacl</i> something to read!
+<p>
+Remember, each game is on its own line. I'm going to leave the final
+scores at the end of each line where they are, as they are harmless
+(they can't occur in the middle of a game in progress). Let's learn
+the models:
+<pre>
+% cd ..
+% ./dbacl/src/dbacl -T text -l ./WhiteWinDraw -e alnum -L uniform -j -w 2 -H 20 ./gamefiles/WhiteWinDraw.txt
+% ./dbacl/src/dbacl -T text -l ./BlackWinDraw -e alnum -L uniform -j -w 2 -H 20 ./gamefiles/BlackWinDraw.txt
+</pre>
+<p>
+The most important option here is "-w 2", which tells <i>dbacl</i> that it
+must pick up single words as well as word pairs. We'll see later if that's a
+good idea. If all went well, then you should have two files in your <i>chess</i> directory.
+<pre>
+% ls -lh *Win*
+-rw-r-----  1 laird laird 3.2M 2005-06-24 17:16 BlackWinDraw
+-rw-r-----  1 laird laird 3.2M 2005-06-24 17:15 WhiteWinDraw
+</pre>
+
+<p>
+<h2>Building the engine</h2>
+<p>
+Now let's build the engine. This is where we'll <strike>cheat</strike>
+take advantage of the wonderful world of open source. 
+<p>
+Remember that what we want to do is take a PGN game that's in progress,
+and let <i>dbacl</i> complete the next move by picking all possible legal next
+moves and adding them in turn to the current game, then we let <i>dbacl</i>
+compute the most probable game under its model. We don't really know
+if <i>dbacl</i>'s model is a good one for chess, and let's not even <i>think</i>
+about competing with <i>Deep Thought</i> here, 
+but this procedure will at least give us a
+way to pick the move.
+<p>
+Unfortunately, computing legal moves is straightforward but tedious,
+so I looked around the internet for something useful, and found the 
+<a href="http://www-cgi.cs.cmu.edu/afs/cs/project/ai-repository/ai/areas/games/chess/san/0.html">SAN Toolkit</a>. This is an old
+freeware toolkit for chess which does everything we want, even though
+it was last updated in 1993 and probably no longer state of the art. 
+It's written in C and we have to compile it, but most importantly we
+can use it directly in a Unix shell environment. Download it and place
+it in the <i>chess</i> directory.
+<pre>
+% untar xfz san.tgz
+% cd SAN
+% cp SAN_DOC/Makefile SAN_SRC
+% cd SAN_SRC
+% make
+% cd ../..
+</pre>
+<p>
+The documentation for this program is a little wanting, but it's not 
+too hard to figure out, and the source code helps. 
+Everything is calculated by the program <i>san</i>,
+which accepts commands. We'll write a script which accepts a PGN
+partial game and one of the <i>dbacl</i> categories we learned, and outputs
+the "best" move, meaning what <i>dbacl</i> thinks is closest to the category
+that was learned. 
+<p>
+Let's try those ideas out before we proceed. We'll need a test PGN file.
+<pre>
+% cat > test.pgn
+1. e4 c5 2. Nf3 e6 3. d3 Nc6
+</pre>
+The cat commands waits until you press CTRL-D to finish. Let's first
+ask the <i>san</i> program for a list of legal moves.
+<pre>
+% echo -ne "svop verb namd nabd napr\nlfer test.pgn\nenum 1\n" \
+ | ./SAN/SAN_SRC/san > test.legal 2>&1
+% head -10 test.legal
+: : : Welcome to the SAN Kit.
+Revised: 1993.05.16
+
+Bd2             : 1
+Be2             : 1
+Be3             : 1
+Bf4             : 1
+Bg5             : 1
+Bh6             : 1
+Kd2             : 1
+</pre>
+<p>
+Okay, this looks promising! There are some pieces of text we'll have to
+remove, but the possible first moves are all there (the listing is cut after
+10 lines). Let's build the game
+line.
+<pre>
+% cat test.pgn | sed 's/[0-9]*\.[ ]*//g' > test.gameline
+% cat test.gameline
+e4 c5 Nf3 e6 d3 Nc6
+</pre>
+<p>
+Next, we complete this gameline with each possible move:
+<pre>
+% cat test.legal | grep '^.* : 1$' | cut -f 1 -d ' ' | \
+ while read move; do
+	echo `cat test.gameline` $move
+ done > test.complete
+% head -10 test.complete
+e4 c5 Nf3 e6 d3 Nc6 Bd2
+e4 c5 Nf3 e6 d3 Nc6 Be2
+e4 c5 Nf3 e6 d3 Nc6 Be3
+e4 c5 Nf3 e6 d3 Nc6 Bf4
+e4 c5 Nf3 e6 d3 Nc6 Bg5
+e4 c5 Nf3 e6 d3 Nc6 Bh6
+e4 c5 Nf3 e6 d3 Nc6 Kd2
+e4 c5 Nf3 e6 d3 Nc6 Ke2
+e4 c5 Nf3 e6 d3 Nc6 Na3
+e4 c5 Nf3 e6 d3 Nc6 Nbd2
+</pre>
+<p>
+And of course, let's check what <i>dbacl</i> thinks of this:
+<pre>
+% cat test.complete | ./dbacl/src/dbacl -n -c ./WhiteWinDraw -f 1 > test.scores
+% cat test.scores
+WhiteWinDraw  53.88 e4 c5 Nf3 e6 d3 Nc6 Bd2
+WhiteWinDraw  52.93 e4 c5 Nf3 e6 d3 Nc6 Be2
+WhiteWinDraw  52.16 e4 c5 Nf3 e6 d3 Nc6 Be3
+WhiteWinDraw  53.11 e4 c5 Nf3 e6 d3 Nc6 Bf4
+WhiteWinDraw  52.88 e4 c5 Nf3 e6 d3 Nc6 Bg5
+WhiteWinDraw  54.64 e4 c5 Nf3 e6 d3 Nc6 Bh6
+WhiteWinDraw  55.32 e4 c5 Nf3 e6 d3 Nc6 Kd2
+WhiteWinDraw  54.82 e4 c5 Nf3 e6 d3 Nc6 Ke2
+WhiteWinDraw  54.55 e4 c5 Nf3 e6 d3 Nc6 Na3
+WhiteWinDraw  57.48 e4 c5 Nf3 e6 d3 Nc6 Nbd2
+WhiteWinDraw  52.07 e4 c5 Nf3 e6 d3 Nc6 Nc3
+WhiteWinDraw  54.69 e4 c5 Nf3 e6 d3 Nc6 Nd4
+WhiteWinDraw  53.83 e4 c5 Nf3 e6 d3 Nc6 Ne5
+WhiteWinDraw  60.95 e4 c5 Nf3 e6 d3 Nc6 Nfd2
+WhiteWinDraw  56.18 e4 c5 Nf3 e6 d3 Nc6 Ng1
+WhiteWinDraw  54.51 e4 c5 Nf3 e6 d3 Nc6 Ng5
+WhiteWinDraw  55.05 e4 c5 Nf3 e6 d3 Nc6 Nh4
+WhiteWinDraw  52.88 e4 c5 Nf3 e6 d3 Nc6 Qd2
+WhiteWinDraw  53.56 e4 c5 Nf3 e6 d3 Nc6 Qe2
+WhiteWinDraw  53.83 e4 c5 Nf3 e6 d3 Nc6 Rg1
+WhiteWinDraw  48.60 e4 c5 Nf3 e6 d3 Nc6 a3
+WhiteWinDraw  49.86 e4 c5 Nf3 e6 d3 Nc6 a4
+WhiteWinDraw  49.73 e4 c5 Nf3 e6 d3 Nc6 b3
+WhiteWinDraw  49.77 e4 c5 Nf3 e6 d3 Nc6 b4
+WhiteWinDraw  48.51 e4 c5 Nf3 e6 d3 Nc6 c3
+WhiteWinDraw  49.23 e4 c5 Nf3 e6 d3 Nc6 c4
+WhiteWinDraw  47.56 e4 c5 Nf3 e6 d3 Nc6 d4
+WhiteWinDraw  49.77 e4 c5 Nf3 e6 d3 Nc6 e5
+WhiteWinDraw  48.33 e4 c5 Nf3 e6 d3 Nc6 g3
+WhiteWinDraw  50.00 e4 c5 Nf3 e6 d3 Nc6 g4
+WhiteWinDraw  49.23 e4 c5 Nf3 e6 d3 Nc6 h3
+WhiteWinDraw  49.86 e4 c5 Nf3 e6 d3 Nc6 h4
+</pre>
+<p>
+First, you'll note that each line contains the current game, but ends
+with one of the legal moves. Just before each game sequence, there
+is a score for that sequence, and since the sequences are nearly identical,
+the scores are nearly identical too.
+<p>
+In the world of <i>dbacl</i>, these scores are the negative logarithm (base 2) of the 
+probability of the sequence, based on the model <i>WhiteWinDraw</i>. It's best to think
+of these scores as a distance away from the category model, so the line with
+the smallest score is the most likely. If you want to know what probability
+each sequence has, it's 1/(2^54.73) etc., which is pretty close to zero! But that's
+normal with these kinds of models. 
+<p>
+So what's the best move? Simply sort the lines in increasing order by score
+and print out the first line:
+<pre>
+% cat test.scores | sort -k 2 -n | head -1
+WhiteWinDraw  47.56 e4 c5 Nf3 e6 d3 Nc6 d4
+</pre>
+Remember, <i>dbacl</i> recommends what it thinks most of the
+games it has learned would do. We can take a peek at the effect of each half move on the
+score for the first line of <i>test.complete</i> by using <i>dbacl</i>'s debugging switch:
+<pre>
+% head -1 test.complete
+e4 c5 Nf3 e6 d3 Nc6 Bd2
+% head -1 test.complete | ./dbacl/src/dbacl  -nv -c ./WhiteWinDraw -f 1 -d
+# categories: WhiteWinDraw 
+# format: avg_score * complexity
+    20.25 * 0.5         []e4[](1)
+     2.91 * 1.0         []e4[]c5[](1)
+     8.82 * 1.5         []c5[](1)
+     4.55 * 2.0         []c5[]Nf3[](1)
+     7.65 * 2.5         []Nf3[](1)
+     3.15 * 3.0         []Nf3[]e6[](1)
+     5.71 * 3.5         []e6[](1)
+     3.21 * 4.0         []e6[]d3[](1)
+     5.48 * 4.5         []d3[](1)
+     4.34 * 5.0         []d3[]Nc6[](1)
+     5.83 * 5.5         []Nc6[](1)
+     4.31 * 6.0         []Nc6[]Bd2[](1)
+     5.75 * 6.5         []Bd2[](1)
+</pre>
+The scores we saw earlier are obtained by multiplying the average by the
+complexity, but <i>dbacl</i> internally works with <i>nats</i>, not <i>bits</i>, 
+so 5.75 * 6.5 / ln(2) = 53.9. Since here we just want to see the tokens that are being
+used, these values aren't important. The most important thing to see is that
+there are contributions from single half moves as well as pairs of half moves,
+and the score balances them all.
+<p>
+<h2>Playing against people</h2>
+<p>
+Chess without a board is not as much fun as chess with an actual board.
+If we really want to claim that <i>dbacl</i> can play chess, then we need to 
+make it work with something like
+GNU <a href="http://savannah.gnu.org/projects/xboard/">XBoard</a> so it
+can play against people. Before we go on, you'll have to make sure
+this program is installed. It comes standard with most GNU/Linux distributions,
+for example on <a href="http://www.debian.org">Debian</a> you can type
+as root:
+<pre>
+% apt-get install xboard
+</pre>
+
+<p>
+A real chess engine that works with XBoard must implement the
+<a href="http://www.tim-mann.org/xboard/engine-intf.html">Chess Engine
+Communication Protocol</a>. This is a bit tedious, so I prepared one earlier.
+Save it as a file named <a href="chess/dce-basic.sh">dce-basic.sh</a> in your <i>chess</i>
+directory, or type it yourself from the listing below.
+ Note that I've just created enough code to play a simple game
+without undo, force, switch sides or board setup. In other words, the only
+thing you can do is start a new game, and play the moves, and <i>dbacl</i> must play Black.
+<pre>
+% cat > dce-basic.sh
+#!/bin/bash
+# This script functions as an incomplete chess engine for XBoard.
+
+DBACL=./dbacl/src/dbacl
+SAN=./SAN/SAN_SRC/san
+TMP=.
+DCE=dce-basic
+
+SANOK="no"
+PGN="$TMP/$DCE.current.pgn"
+GAMELINE="$TMP/$DCE.current.gameline"
+SCORES="$TMP/$DCE.current.scores"
+ENGINEMOVE="$TMP/$DCE.current.emove"
+SANOUT="$TMP/$DCE.current.stdout"
+SANERR="$TMP/$DCE.current.stderr"
+
+SIDE="black"
+MOVENOW="no"
+CATFILE="./BlackWinDraw"
+
+trap "" SIGTERM
+trap "" SIGINT
+
+function exec_san() {
+	rm -rf $PGN.new $SANOUT $SANERR
+	echo -ne "svop namd nabd napr\nlfer $PGN\n$1\nsfer $PGN.new" \
+		| "$SAN" > "$SANOUT" 2> "$SANERR"
+	if grep Error "$SANOUT" > /dev/null; then
+		echo "Error (illegal move): $cmd"
+		return 1
+	else 
+		mv $PGN.new $PGN
+	fi
+	return 0
+}
+
+function do_engine_move() {
+	if exec_san "enum 1"; then
+		# legal moves are in $SANOUT
+		cat "$PGN" \
+		| sed -e 's/\r//g' \
+		| sed -e :a -e '$!N;s/\n\([a-hKQNBRO0-9]\)/ \1/;ta' -e 'P;D' \
+		| sed -e 's/^ *//' \
+		| grep '^1\.' \
+		| sed 's/[0-9]*\.[ ]*//g' \
+		| sed 's/ \*.*$//' \
+		> "$GAMELINE"
+
+		# make all completions and let dbacl decide
+		cat "$SANOUT" \
+		| grep '.* : 1$' \
+		| cut -f 1 -d ' ' \
+		| while read move; do
+			echo "`cat $GAMELINE` $move" 
+		done \
+		| "$DBACL" -n -c "$CATFILE" -f 1 \
+		> "$SCORES"
+
+		if [ `cat "$SCORES"| wc -l` = "0" ]; then
+			# no moves left, game over!
+			# the gameline contains the result
+			echo "`cat $GAMELINE | sed 's/^.* //'` {Play again?}"
+			return 0
+		else
+			# pick best scoring move
+			cat "$SCORES" \
+			| sort -k 2 -n \
+			| head -1 \
+			| sed -e 's/^.* //' \
+			> "$ENGINEMOVE"
+	
+			if exec_san "`cat $ENGINEMOVE`"; then
+				echo "move `cat $ENGINEMOVE`"
+				return 0
+			fi
+		fi
+
+	fi
+	return 1
+}
+
+function do_reset() {
+	rm -f $PGN
+	touch $PGN
+	exec_san ""
+}
+
+function do_move() {
+	if [ "$SANOK" != "yes" ]; then
+		echo "Illegal move (you must use SAN): $1"
+		echo "Error (cannot play): $1"
+	fi
+	if exec_san "$1"; then
+		MOVENOW="yes"
+	fi
+}
+
+while read cmd; do
+	case "$cmd" in
+	xboard)
+		echo "feature san=1 done=1"
+		;;
+	"accepted san")
+		SANOK="yes"		
+		;;
+	quit)
+		exit 0
+		;;
+	new)
+		do_reset
+		;;
+	variant*)
+		echo "Error (only standard chess please): $cmd"
+		;;
+	[a-h][x1-8]*)
+		do_move "$cmd"
+		;;
+	[KQBNRP][xa-h]*)
+		do_move "$cmd"
+		;;
+	O-O*)
+		do_move "$cmd"
+		;;
+	analyze)
+		echo "Error (unknown command): $cmd"
+		;;
+	*) 
+		# ignore other commands
+		echo "Error (command not implemented): $cmd"
+		;;
+	esac
+	if [ "$MOVENOW" = "yes" ]; then
+		if do_engine_move; then
+			MOVENOW="no"
+		else
+			echo "Error (engine blew up): kaboom"
+			exit 1
+		fi
+	fi
+done
+</pre>
+<p>
+The source code above is not very complex. The last part reads commands one
+line at a time and calls various functions depending on the command.
+Then, if it is Black's turn, it calls the <i>do_engine_move</i> function. 
+The current state of the game is constantly updated in the <i>dce-basic.current.pgn</i> file which is created in your <i>chess</i> directory, the list
+of scores computed by <i>dbacl</i> is in the file <i>dce-basic.current.scores</i>, and the final best engine move is saved in the file <i>dce-basic.current.emove</i>. 
+<p>
+Once you have this engine script in your <i>chess</i> directory, make sure it has
+execute permissions, and then you can try it out with XBoard.
+<pre>
+% chmod +x ./dce-basic.sh
+% xboard -fcp ./dce-basic.sh
+</pre>
+<p>
+
+It's much more fun to read this account if you actually try this out
+with XBoard yourself, so I won't say what happens next or how well
+<i>dbacl</i> does as a chess player. The discussion with answers continues
+in the next section so consider this a spoiler warning. Don't peek!
+<p>
+When playing chess on XBoard, don't forget that <a href="chess/dce-basic.sh">dce-basic.sh</a> is
+incomplete. All you can do is play White, and restart the game whenever
+you want. No fancy menu choices. However, you can follow what's going
+on at any time by looking at the temporary files named 
+<i>dce-basic.current.*</i> which are placed in your <i>chess</i> directory.
+<p>
+<img src="chess/down.png"><p>
+<img src="chess/spoiler.png" alt="spoiler space" height="100%">
+<p>
+<h2>First steps</h2>
+<p>
+Okay, you've tried your first game against <i>dbacl</i>, and it wasn't very
+impressive. In fact, it was practically random play! Note that it
+isn't entirely random - <i>dbacl</i> doesn't pick for example a random pawn
+on first move but slightly prefers positions towards the middle of the board. What's
+going on?
+<p>
+There can be only one culprit, and it's the model we used for learning,
+namely the "-w 2" switch. To understand this, let's look at the game line
+again:
+<pre>
+% cat test.gameline
+e4 c5 Nf3 e6 d3 Nc6
+</pre>
+<p>
+Now <i>dbacl</i> learns by reading single words (ie half moves) and consecutive pairs
+of words, then building a model out of these frequencies. This means that there is nothing in the model which makes for example the third word Nf3 depend on
+the first one e4 except through the second one c5, which could well be anything.
+In other words, consecutive moves by one colour are largely independent, 
+which is why it feels that <i>dbacl</i> has no strategy.
+<p>
+We can force <i>dbacl</i> instead to learn 3, or better yet 4 consecutive words
+as a pattern. That should link e4 with Nf3 and even e6. Let's try it (this could take
+a few minutes to run):
+<pre>
+% ./dbacl/src/dbacl -T text -l ./BlackWinDraw -e alnum -L uniform -j -w 4 -H 20 ./gamefiles/BlackWinDraw.txt
+dbacl:warning: table full, some tokens ignored - try with option -h 21
+</pre>
+Oh, oh. Here's a problem that we might as well get out of the way now. 
+Looking at pairs, triples, etc. (these are called n-grams) uses a lot of memory
+because of all the possible combinations. That's one reason why long n-grams aren't that
+popular in machine classification. 
+Here <i>dbacl</i> ran out of space and told us so, but
+still tried to learn something. But we don't want a skewed model, so we'll
+increase the allowable space and relearn. You will have to be
+mindful of this when you experiment.
+<pre>
+% ./dbacl/src/dbacl -T text -l ./BlackWinDraw -e alnum -L uniform -j -w 4 -H 22 ./gamefiles/BlackWinDraw.txt
+% xboard -fcp ./dce-basic.sh
+</pre>
+<p>
+<p>
+<img src="chess/down.png"><p>
+<img src="chess/spoiler.png" alt="spoiler space" height="100%">
+<p>
+<h2>Several steps</h2>
+<p>
+It's hard to see a big improvement with "-w 4", which is not very surprising if you think about it.
+Let's try with "-w 7", which for technical reasons is the maximum <i>dbacl</i> can
+handle. But before we do this, I want to briefly mention the work of
+<a href="http://www-groups.dcs.st-and.ac.uk/~history/Mathematicians/Shannon.html">C.E. Shannon</a>.
+<p>
+One of Shannon's famous experiments concerns the approximation of English. He
+asked what would sentences look like if letters or words were picked randomly from
+a book. Here is what he found:
+<p>
+(Single letters) OCRO HLI RGWR NMIELWIS EU LL NBNESEBYA TH EEI ALHENHTTPA OOBTTVA NAH BRL.
+<p>
+(Pairs of letters) ON IE ANTSOUTINYS ARE T INCTORE ST BE S DEAMY ACHIN D ILONASIVE TUCOOWE AT TEASONARE FUSO TIZIN ANDY TOBE SEACE CTISBE.
+<p>
+(Triples of letters) IN NO IST LAT WHEY CRATICT FROURE BIRS GROCID PONDENOME OF DEMONSTURES OF THE REPTAGIN IS REGOACTIONA OF CRE.
+<p>
+(Single words) REPRESENTING AND SPEEDILY IS AN GOOD APT OR COME CAN DIFFERENT NATURAL HERE HE THE A IN CAME THE TO OF TO EXPERT GRAY COME TO FURNISHES
+THE LINE MESSAGE HAD BE THESE.
+<p>
+(Pairs of words) THE HEAD AND IN FRONTAL ATTACK ON AN ENGLISH WRITER THAT THE CHARACTER OF THIS POINT IS THEREFORE ANOTHER METHOD FOR THE LETTERS THAT
+THE TIME OF WHO EVER TOLD THE PROBLEM FOR AN UNEXPECTED.
+<p>
+So can we expect this also with chess moves? Let's try it. Because of 
+the heavy memory requirements when "-w 7" is used (and the long time it takes),
+ we'll learn a smaller 
+game collection <i>BlackWin.txt</i>
+(but we keep the <i>BlackWinDraw</i> category name so we don't have to modify <i>dce-basic.sh</i>).
+<pre>
+% ./dbacl/src/dbacl -T text -l ./BlackWinDraw -e alnum -L uniform -j -w 7 -H 23 ./gamefiles/BlackWin.txt
+</pre>
+<p>
+Before we start playing, how can we be sure that <i>dbacl</i> will match patterns in the way we expect? 
+Let's try the debug switch like we did before on our test gameline:
+<pre>
+% head -1 test.complete | ./dbacl/src/dbacl -nv -c ./BlackWinDraw -f 1 -d
+# categories: BlackWinDraw 
+# format: avg_score * complexity
+    63.73 * 0.1         []e4[](1)
+    -9.44 * 0.3         []e4[]c5[](1)
+    15.46 * 0.4         []c5[](1)
+     6.91 * 0.6         []e4[]c5[]Nf3[](1)
+    -6.53 * 0.7         []c5[]Nf3[](1)
+     5.07 * 0.9         []Nf3[](1)
+     4.17 * 1.0         []e4[]c5[]Nf3[]e6[](1)
+     1.31 * 1.1         []c5[]Nf3[]e6[](1)
+    -9.96 * 1.3         []Nf3[]e6[](1)
+    -2.22 * 1.4         []e6[](1)
+    -0.86 * 1.6         []e4[]c5[]Nf3[]e6[]d3[](1)
+    -1.00 * 1.7         []c5[]Nf3[]e6[]d3[](1)
+    -3.88 * 1.9         []Nf3[]e6[]d3[](1)
+    -9.31 * 2.0         []e6[]d3[](1)
+    -3.80 * 2.1         []d3[](1)
+    -2.59 * 2.3         []e4[]c5[]Nf3[]e6[]d3[]Nc6[](1)
+    -1.58 * 2.4         []c5[]Nf3[]e6[]d3[]Nc6[](1)
+    -2.16 * 2.6         []Nf3[]e6[]d3[]Nc6[](1)
+    -2.99 * 2.7         []e6[]d3[]Nc6[](1)
+    -5.49 * 2.9         []d3[]Nc6[](1)
+    -2.12 * 3.0         []Nc6[](1)
+     0.51 * 3.1         []e4[]c5[]Nf3[]e6[]d3[]Nc6[]Bd2[](1)
+     2.92 * 3.3         []c5[]Nf3[]e6[]d3[]Nc6[]Bd2[](1)
+     5.13 * 3.4         []Nf3[]e6[]d3[]Nc6[]Bd2[](1)
+     7.16 * 3.6         []e6[]d3[]Nc6[]Bd2[](1)
+     6.37 * 3.7         []d3[]Nc6[]Bd2[](1)
+     3.35 * 3.9         []Nc6[]Bd2[](1)
+     5.84 * 4.0         []Bd2[](1)
+</pre>
+<p>
+Perfect! Clearly <i>dbacl</i> is picking up sequences up to seven long. Now
+let's make a proper check:
+<pre>
+% xboard -fcp ./dce-basic.sh
+</pre>
+<p>
+<img src="chess/down.png"><p>
+<img src="chess/spoiler.png" alt="spoiler space" height="100%">
+<p>
+<h2>Another improvement</h2>
+<p>
+If you've tried the case "-w 7", then you may have noticed a true improvement
+over the previous attempts. But while <i>dbacl</i> no longer plays <i>quite</i> so randomly, the overall
+game seems touch and go. Openings are sometimes recognized, but there's no
+strategy and frequently <i>dbacl</i> seems to forget what it was doing. Also,
+there aren't many attempts to protect the 8th row from even direct attacks.
+<p>
+We can explain this type of behaviour with what we already know about the
+<i>dbacl</i> model. Since one chess move needs two words in PGN notation,
+then even with "-w 7", the longest connected word sequences
+are just over 3 chess moves long. These sequences aren't under <i>dbacl</i>'s control
+since you play White, so when they break, this causes confusion and another
+potential sequence is followed. That's why <i>dbacl</i> seems to lose interest.
+<p>
+Another problem is that <i>dbacl</i>'s model has no concept of opening, middle and
+endgame. If row 8 is attacked, it has no way of knowing if there are pawns
+which protect the piece, and whether there is room to move away, because
+the training patterns are averaged over many games. We'll come
+back to this observation later.
+<p>
+So far we've treated half-moves as fundamental, but perhaps it makes more sense
+to base our models on full moves? Since our engine always plays
+Black, then the completed gamelines will always have an even number of
+words. Moreover, the '-w 7" model shall truly be <i>seven chess moves</i> long, not three
+and a half. Let's try it. We can combine pairs of moves by replacing the
+space between them with underscores as follows (<a href="chess/combine_half_moves.sh">combine_half_moves.sh</a>).
+<pre>
+% cat test.gameline
+e4 c5 Nf3 e6 d3 Nc6
+% cat > combine_half_moves.sh
+#!/bin/sh
+sed -e 's/$/ Z/' -e 's/ \([^ ]* *[^ ]\)/_\1/g' -e 's/[ ]*Z$//'
+% chmod +x combine_half_moves.sh
+% cat test.gameline | ./combine_half_moves.sh
+e4_c5 Nf3_e6 d3_Nc6
+</pre>
+<p>
+Now we have to adapt the training sets, and change the code of <i>dce-basic.sh</i>
+slightly. I've called this modification <a href="chess/dce-1.sh">dce-1.sh</a>
+<pre>
+% cd gamefiles
+% cat BlackWinDraw.txt | ../combine_half_moves.sh > BlackWinDraw-1.txt
+% cat BlackWin.txt | ../combine_half_moves.sh > BlackWin-1.txt
+% cd ..
+</pre>
+<p>
+Naturally, we must learn the new dataset. You might want to make a cup of coffee while you wait.
+<pre>
+% ./dbacl/src/dbacl -T text -l ./BlackWin-1 -e graph -L uniform -j -w 7 -H 23  ./gamefiles/BlackWin-1.txt
+</pre>
+<p>
+One last safety check and we'll be ready:
+<pre>
+% cat test.gameline | ./combine_half_moves.sh | ./dbacl/src/dbacl -nv -c ./BlackWin-1 -f 1 -d
+# categories: BlackWin-1 
+# format: avg_score * complexity
+   128.93 * 0.1         []e4_c5[](1)
+   -11.83 * 0.3         []e4_c5[]Nf3_e6[](1)
+    37.71 * 0.4         []Nf3_e6[](1)
+    17.15 * 0.6         []e4_c5[]Nf3_e6[]d3_Nc6[](1)
+   -20.69 * 0.7         []Nf3_e6[]d3_Nc6[](1)
+     7.60 * 0.9         []d3_Nc6[](1)
+</pre>
+Okay, it seems to be working.
+<pre>
+% chmod +x dce-1.sh
+% xboard -fcp ./dce-1.sh
+</pre>
+<p>
+<img src="chess/down.png"><p>
+<img src="chess/spoiler.png" alt="spoiler space" height="100%">
+<p>
+<h2>Aimless behaviour</h2>
+<p>
+Compared to the earlier attempts, this change seems to have improved
+<i>dbacl</i>'s tactics. However, we
+still have much aimless behaviour in the middle and end games. How do
+we address this?
+<p>
+Our biggest problem is possibly that <i>dbacl</i> is blind. It simply doesn't know or care about
+the true configuration of the board pieces, like a real chess engine would.
+Instead, everything it knows are the likely sequences of moves that it found
+in the training games.
+<p>
+Computer chess is an area which has been studied extensively for a long time,
+and while we could try to apply these methods to our little engine,
+we wouldn't learn anything new about chess or about <i>dbacl</i>. So instead,
+I am only going to try the kind of things that would not be out of place in spam filtering.
+<p>
+Deep in the dawn of spam filtering, people devised keyword rules to
+send unwanted email to the trash. Even today, this is a popular method
+to detect, for example, those messages which contain "VIAGRA" in the
+subject line, and automatically pick an action to take. 
+Maybe we can detect some fixed text pattern in the gameline and use this to override
+the normal <i>dbacl</i> scores? Let's look at a typical game.
+<pre>
+% head -1 ./gamefiles/BlackWin.txt | fmt
+d4 Nf6 c4 e6 Nf3 b6 g3 Ba6  Qc2 c5 Bg2 Bb7 O-O Be7 Nc3 cxd4  Nxd4 Bxg2
+Kxg2 Qc7 Qd3 O-O e4 d6  f3 Nbd7 b3 a6 Be3 Qb7 Rfd1 Rfe8  Bf2 Bf8 Nc2 Rec8
+Ne3 Rab8 a4 Ne5  Qd2 Rc7 Rac1 Rbc8 Qe2 Nc6 Be1 Nd7  g4 Nc5 Qc2 Nb4 Qb1
+Be7 Ne2 Nc6  Bc3 Ne5 Ng3 Bg5 Ngf1 Bf4 Bxe5 Bxe5  Rd2 Bf4 Rcd1 b5 axb5
+axb5 Ra2 Nd7  Qd3 Nc5 Qc2 h6 Ra5 bxc4 bxc4 Nd7  Qe2 Ne5 Rb5 Qa6 Rb2
+Nxc4 Nxc4 Qxc4  Rd3 Qc5 Ne3 Qg5 Qf2 Rc3 Rxc3 Rxc3  Nf1 Kh7 Rc2 Qe5 Ng3
+Be3 Qe2 g6  Nf1 Bf4 Ng3 Kg7 Qf2 Be3 Qe2 Qd4  Nf1 Bf4 Ng3 Rxc2 Qxc2 Qd2+
+Qxd2 Bxd2  Ne2 g5 Nd4 Kf6 Nb3 Bc3 Kf2 Ke5  Ke3 Bb4 Nc1 Bc5+ Ke2 Bg1 Nd3+
+Kd4  h3 Kc3 Nc1 Bh2 Nd3 Bf4 Nf2 d5  exd5 exd5 Nd3 Be5 Nc1 Kd4 Nd3 Bf4  Nb4
+Ke5 Nd3+ Kd6 Nb4 Ke6 Nd3 Bd6  Nb2 Ke5 Nd3+ Kf6 Nb2 Ke6 Nd3 h5  Nf2 f5 Nd1
+fxg4 fxg4 hxg4 hxg4 Kf6  Nb2 Ke5 Kf3 Kd4 Nd1 Kd3 Nf2+ Kd2  Nh3 Be7 Nf2
+Bc5 Nh1 Bd6 Nf2 Bf4  Nh1 Be3 Ng3 Kd3 Nh1 Bg1 Ng3 Kd2  Nf5 d4 Ng3 d3  0-1
+</pre>
+<p>
+Besides the normal moves that represent a change in position, the most
+obvious feature is that some of
+the moves above also contain an 'x', which means that this is a capturing move.
+Interesting! One of the problems with the <i>dbacl</i> engine so far is that often,
+an opportunity for capturing White's pieces is simply ignored. Can we devise
+a keyword rule which triggers on 'x' to force <i>dbacl</i> to capture an available
+piece instead of ignoring it? 
+<p>
+Let's try it: first we'll need a gameline which includes an 'x' type
+move, since our previous <i>test.gameline</i> file doesn't. Note that
+we'll forget temporarily the underscore trick we used in the previous
+section, just to keep things simple at first. 
+<p>
+If you look at the full game listed two paragraphs ago, you'll see that
+the last full move on the first line is "Nxd4 Bxg2", so if we use this line
+and delete the last full move, then the possible completions will contain at least "Nxd4" and we have a suitable test case.
+<pre>
+% cat > test2.pgn
+1. d4 Nf6 2. c4 e6 3. Nf3 b6 4. g3 Ba6 5. Qc2 c5 6. Bg2 Bb7 7. O-O Be7 8. Nc3 cxd4
+% echo -ne "svop verb namd nabd napr\nlfer test2.pgn\nenum 1\n" \
+ | ./SAN/SAN_SRC/san > test2.legal 2>&1
+% cat test2.legal | grep '^.* : 1$' | cut -f 1 -d ' ' | \
+ while read move; do
+        echo `cat test2.gameline` $move
+ done > test2.complete
+% cat test2.complete | ./dbacl/src/dbacl -n -c ./WhiteWinDraw -f 1 > test2.scores
+</pre>
+<p>
+There are 48 different potential moves in the <i>test2.scores</i> file, and
+what we are interested in is the score (column 2) and the potential half move
+(column 21).
+<pre>
+% cat test2.scores | sort -k 2 -n | cut -f 2,21 -d ' ' | head -25
+129.08 h3
+129.35 a4
+129.89 a3
+129.89 b3
+129.89 e3
+133.09 Qg6
+133.36 Bf4
+133.36 Bg5
+133.36 Qa4
+133.36 Rb1
+133.36 Rd1
+133.86 Be3
+133.86 Bh3
+133.86 Nb5
+133.86 Ne4
+133.86 Nh4
+133.86 Qb3
+133.86 Qd3
+133.86 Qe4
+137.87 Nxd4
+154.68 e4
+154.96 c5
+155.77 b4
+155.81 h4
+155.95 g4
+</pre>
+<p>
+I've only listed the first 25 moves by score but it's clear that <i>dbacl</i>'s
+model puts "h3" as the most likely move, and "Nxd4" way down in 20th position!
+Let's extract the capturing moves.
+<pre>
+% cat test2.scores | grep 'x[^ _]*$' | sort -k 2 -n
+WhiteWinDraw 138.73 d4 Nf6 c4 e6 Nf3 b6 g3 Ba6 Qc2 c5 Bg2 Bb7 O-O Be7 Nc3 cxd4 Nxd4 Bxg2 Nxd4
+WhiteWinDraw 162.90 d4 Nf6 c4 e6 Nf3 b6 g3 Ba6 Qc2 c5 Bg2 Bb7 O-O Be7 Nc3 cxd4 Nxd4 Bxg2 Qxh7
+</pre>
+<p>
+Since there is more than one possible capturing move, the engine has to decide what it wants
+to play.
+By sorting the capturing moves by their scores, we let <i>dbacl</i> tell us which move it prefers.
+Obviously, "Nxd4" is this preferred candidate.
+It's also possible that for some gamelines, there is no legal capturing move; we'll have
+to use the full list of scores as before in that case.
+<p>
+Finally, we must decide how we are going to integrate this special handling of capturing moves
+into our chess engine.
+In spam filters, a keyword rule typically stops all other tests from happening afterwards, because the rule is trusted to override other decisions. Here, this means that we first score
+all the capturing moves if there are any, and use the best one regardless of other options.
+It's only if there are no capturing moves that we look at the remaining possibilities.
+<p>
+By using the explanations above, you can modify <a href="chess/dce-1.sh">dce-basic.sh</a> yourself, or try
+out <a href="chess/dce-2.sh">dce-2.sh</a>, which implements both the 'x' and "underscore" tricks together.
+<pre>
+% chmod +x dce-2.sh
+% xboard -fcp ./dce-2.sh
+</pre>
+
+<p>
+<img src="chess/down.png"><p>
+<img src="chess/spoiler.png" alt="spoiler space" height="100%">
+<p>
+<h2>Tactical adjustments</h2>
+<p>
+Quite a change in behaviour! The engine no longer ignores capture opportunities, 
+but our method has
+made it greedy. <i>dbacl</i> is now so greedy that there is no tension left in the game, and
+since it doesn't know the value of each piece, it often makes bad bargains.
+<p>
+Unfortunately, there isn't enough data in the PGN format to let <i>dbacl</i>
+read off easily the value of an exchange. If you look at the full training
+game listed earlier, you'll see many moves marked with an 'x', such as
+"cxd4" "Nxd4" "Bxg2" "Kxg2", but none of these moves identifies the
+type of the captured piece, only the piece doing the capturing. It's certainly possible to <i>deduce</i>
+the relevant piece by replaying all the moves on an imaginary board,
+but then our chess engine would no longer act like a spam
+filter. Keeping an imaginary board is roughly the equivalent of
+<i>understanding the actual meaning</i> of an email.
+<p>
+So <i>dbacl</i>, as a chess-playing-spam-filter, is limited to two things: 
+it can limit the risk of an exchange, and limit the frequency of exchanges.
+<p>
+To limit risk, if there are several capture scenarios available, it can
+always prefer to capture with the least valued piece (since the type of the piece
+doing the capturing is known by looking at the move), but note that this doesn't help
+when there is exactly one capture move possible.
+<p>
+Limiting the frequency of exchanges would make <i>dbacl</i> less greedy and 
+refuse to capture pieces all the time. As we noted earlier, <i>dbacl</i> doesn't naturally 
+tend to capture pieces, so we must find a balance.
+<p>
+We can force a capture when there are two or more capture opportunities. Together
+with the risk limitation idea, these types of captures are then performed by 
+lower value pieces in relative terms.
+<p>
+Clearly, there are endless other things we can try, but there is a price to pay.
+As capture rules become heavier and more complex, the original patterns learned by
+<i>dbacl</i> from the training games lose their importance. The <i>dbacl</i> chess engine becomes
+a hybrid, part ordinary chess engine and part Bayesian text classifier.
+<p>
+I've implemented the two rules above in <a href="chess/dce-3.sh">dce-3.sh</a>. Try it out now.
+<pre>
+% chmod +x dce-3.sh
+% xboard -fcp ./dce-3.sh
+</pre>
+
+<!-- not finished, but doesn't look promising 
+
+<p>
+<img src="chess/down.png"><p>
+<img src="chess/spoiler.png" alt="spoiler space" height="100%">
+<p>
+<h2>The carrot and the stick</h2>
+<p>
+If you've followed the story so far, you may have noticed a missing ingredient. 
+Bayesian spam filters require both examples of spam, but also examples of good email to
+perform well. The good email teaches the filter what features we want to accept (the carrot)
+and the spam messages teach it what features we want to reject (the stick).
+<p>
+So far, the <i>dbacl</i> chess engine only uses a carrot, namely a collection of games we want
+to mimic. The best move is chosen to minimize the distance towards the model. If we want to use
+a second model (the stick), then we must find a way of combining the scores. The easiest
+way is to subtract them. Note that it's important to use comparable models when doing this,
+so let's learn brand new category files with identical constraints. 
+<pre>
+% cd ./gamefiles
+% cat BlackWin.txt | ../combine_half_moves.sh > BlackWin-4.txt
+% cat WhiteWin.txt | ../combine_half_moves.sh > WhiteWin-4.txt
+% cd ..
+% ./dbacl/src/dbacl -T text -l ./BlackWin-4 -e graph -L uniform -j -w 7 -H 23 ./gamefiles/BlackWin-4.txt
+% ./dbacl/src/dbacl -T text -l ./WhiteWin-4 -e graph -L uniform -j -w 7 -H 23 ./gamefiles/WhiteWin-4.txt 
+</pre>
+<p>
+So now we have a carrot model <i>Blackwin-4</i> and a stick model <i>WhiteWin-4</i>, let's score a set of completed gamelines:
+<pre>
+% cat test.complete | | sed -e 's/\([^ ]*\) \([^ ]*\) \([^ ]*\)/\1_\2 \3/g' \
+  -e 's/\([^ ]*\) \([^ ]*\)$/\1_\2/' > test-4.complete
+% cat test-4.complete | ./dbacl/src/dbacl -n -c ./WhiteWin-4 -c ./BlackWin-4 -f 1,2 > test-4.scores
+% head -10 test-4.scores
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Bd2
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Be2
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Be3
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Bf4
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Bg5
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Bh6
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Kd2
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Ke2
+WhiteWin-4 169.69 BlackWin-4 192.53 e4_c5 Nf3_e6 d3_Nc6_Na3
+WhiteWin-4 177.67 BlackWin-4 200.51 e4_c5 Nf3_e6 d3_Nc6_Nbd2
+</pre>
+<p>
+These are the first few possible moves. Clearly, <i>dbacl</i> thinks they are
+ closer to <i>WhiteWin-4</i> than <i>BlackWin-4</i>. We can subtract the scores and sort the
+result as follows:
+<pre>
+% cat test-4.scores | while read line; do
+  S=`echo $line | cut -d ' ' -f2,4 | sed 's/ / - /' | bc -l`
+  echo "$S $line";
+done | sort -k 1 -n > test-4.sorted
+% head -10 test-4.sorted
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_a3
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_a4
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_b3
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_b4
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_c3
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_c4
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_d4
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_e5
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_g3
+-22.84 WhiteWin-4 161.71 BlackWin-4 184.55 e4_c5 Nf3_e6 d3_Nc6_g4
+</pre>
+<p>
+Why do we have a negative difference? Since <i>dbacl</i> plays Black, 
+we want the smallest scores to represent a case when
+<i>BlackWin-4</i> is more relevant than <i>WhiteWin-4</i>.
+<p>
+What seems a little surprising is that all scores are the same, 
+but this might just be coincidence. Let's try out <i>dce-4.sh</i>
+which implements all these changes.
+<pre>
+% chmod +x ./dce-4.sh
+% xboard -fcp ./dce-4.sh
+</pre>
+
+//-->
+
+<p>
+<img src="chess/down.png"><p>
+<img src="chess/spoiler.png" alt="spoiler space" height="100%">
+<p>
+<h2>Randomized play</h2>
+<p>
+We've come a long way, so let's go back to the initial question.
+"Can a spam filter play chess?". To answer this question affirmatively,
+we need at least one example which can't be explained by random play.
+While <i>dbacl</i> undoubtedly makes some strange chess decisions sometimes,
+let's look at the following game fragment played against 
+<a href="chess/dce-3.sh">dce-3.sh</a>:
+<p>
+<img src="chess/csfpc1.png">
+<img src="chess/csfpc2.png">
+<img src="chess/csfpc3.png">
+<p>
+Clearly, <i>dbacl</i> picked up the pawn defensive moves from the games archive,
+as this succession of moves is very unlikely to be random (all moves are on
+the same side of the board, and none of the moves are capturing moves, so
+cannot be explained by capture heuristics which partially override <i>dbacl</i>'s
+natural choices).
+<p>
+So <i>dbacl</i> has definitely learned something about chess, at 
+least in some tactical situations, 
+and can probably hold
+ its own against an average three year old. Mission accomplished!
+<p>
+Well, the title of this section is "randomized play", and there is 
+one more thing to do. So far, the <i>dbacl</i> chess engine is deterministic:
+when faced with identical White moves, it will always play the same way.
+This gets boring very fast. What we would like is more randomized 
+play, but which still uses the <i>dbacl</i> scoring system.
+<p>
+For randomized play, we can think of the scores as equivalent 
+probabilities. Then we
+can pick not just the highest probability (lowest score) move as we've done so far, but instead any move according 
+to its probability. Let's look again at the file <i>test.scores</i>
+that we created earlier:
+<pre>
+% head -5 test.scores
+WhiteWinDraw  53.88 e4 c5 Nf3 e6 d3 Nc6 Bd2
+WhiteWinDraw  52.93 e4 c5 Nf3 e6 d3 Nc6 Be2
+WhiteWinDraw  52.16 e4 c5 Nf3 e6 d3 Nc6 Be3
+WhiteWinDraw  53.11 e4 c5 Nf3 e6 d3 Nc6 Bf4
+WhiteWinDraw  52.88 e4 c5 Nf3 e6 d3 Nc6 Bg5
+</pre>
+<p>
+As I already mentioned, the <i>dbacl</i> model probabilities are related to
+these scores as follows: Prob[Bd2] = 2^(-53.88), Prob[Be2] = 2^(-52.93), etc.
+Unfortunately, these are all very small probabilities and we can't
+easily represent them as floating point numbers once the gameline becomes
+much longer, let alone pick them at random. So first, let's subtract the biggest common factor: If we sort the scores, then the top score is the factor we want:
+<pre>
+% cat test.scores | sort -k 2 -n > test.scores.prob
+% head -1 test.scores.prob
+WhiteWinDraw  47.56 e4 c5 Nf3 e6 d3 Nc6 d4
+</pre>
+<p>
+We'll write an awk program to do the randomizing, so here's the first part:
+<pre>
+% cat > renorm.awk
+#!/usr/bin/awk -f
+{
+  if( cf == 0 ) {
+    cf = $2
+  }
+  print $2 - cf, $0
+}
+% cat test.scores.prob | awk -f ./renorm.awk | head -5
+0 WhiteWinDraw  47.56 e4 c5 Nf3 e6 d3 Nc6 d4
+0.77 WhiteWinDraw  48.33 e4 c5 Nf3 e6 d3 Nc6 g3
+0.95 WhiteWinDraw  48.51 e4 c5 Nf3 e6 d3 Nc6 c3
+1.04 WhiteWinDraw  48.60 e4 c5 Nf3 e6 d3 Nc6 a3
+1.67 WhiteWinDraw  49.23 e4 c5 Nf3 e6 d3 Nc6 c4
+</pre>
+<p>
+Okay, the first column gives the modified score and the rest is the original
+line. Since these are binary exponents rather than actual probabilities, 
+we'll use a rejection sampler to pick the correct line and print it out.
+Here's the full randomizer:
+<pre>
+% cat > randomizer.awk
+#!/usr/bin/awk -f
+{
+  if( cf == 0 ) {
+    cf = $2;
+  }
+  score[NR] = $2 - cf;
+  line[NR] = $0;
+}
+
+END{
+  # randomizer seeded by time of day
+  # don't use more often than once per second.
+  srand();
+  while(1) {
+    x = int(rand() * NR) + 1;
+    t = -log(rand());
+    if( log(2) * score[x] < t ) {
+      print line[x];
+      break;
+    }
+  }
+}
+% cat test.scores.prob | ./randomizer.awk 
+WhiteWinDraw  48.33 e4 c5 Nf3 e6 d3 Nc6 g3
+% cat test.scores.prob | ./randomizer.awk 
+WhiteWinDraw  47.56 e4 c5 Nf3 e6 d3 Nc6 d4
+</pre>
+<p>
+Awk's randomizer is seeded by the time of day, so if you repeatedly run the <i>randomizer.awk</i> script in a fast loop, it will always output the same result. But for chess against people, we don't really care about the quality of the randomness involved.
+<p>
+I've added the randomizer to the final version of the chess engine, <a href="chess/dce.sh">dce.sh</a>, which also contains a few other improvements. If you feel
+like experimenting further with the <i>dbacl</i> chess engine, that script is probably
+the best starting point. Enjoy!
+<pre>
+% chmod +x ./dce.sh
+% xboard -fcp ./dce.sh
+</pre>
+<p>
+<img src="chess/down.png"><p>
+<img src="chess/spoiler.png" alt="spoiler space" height="100%">
+<p>
+<h2>Wrapping up</h2>
+<p>
+It's time to conclude this investigation and see what we've learned. The
+original question was "Can a spam filter play chess?". Clearly, the answer to
+this is yes, but making it play well is not so easy. 
+<p>
+A crucial aspect I haven't touched on here are chess tournaments. The only way to
+reliably judge potential improvements in an engine is to make it play other engines
+with known strengths. Not all types of tournaments are appropriate for the <i>dbacl</i> 
+chess engine - for example randomized initial positions and endgame puzzles are meaningless,
+because <i>dbacl</i> doesn't think ahead more than one half move, and it needs the full game
+history for matching patterns. Moreover, the fundamental behaviour is learned entirely
+from training sets. Thus <i>dbacl</i>'s strength as a chess player is meaningless without reference
+to its training archive. However, if this archive is fixed, then incremental improvements to the
+algorithms can be evaluated in that context.
+<p>
+<i>dbacl</i> is able to learn some tactics simply by reading large collections of
+games. However, it seems that strategy is beyond its capabilities. Moreover,
+there are some fundamental limitations in treating a PGN format game like a text
+document: some information such as the values of exchanged pieces aren't easy to read off
+without keeping an imaginary board for replaying moves.
+<p>
+There are many ways to change the characteristics of the basic chess engine we've
+built here. Besides more complex capture heuristics, one can try to account for
+the length of the game (opening/middle/endgame), the difference in the number of pieces
+captured by each side, etc. Beyond that, the PGN gameline representation which we used 
+here can be replaced with more informative symbol sequences. In principle, one could replace
+each move with a pictorial representation of the board such as 
+<a href="http://www.tim-mann.org/Standard">FEN</a>, but besides the added implementational complications, this causes difficulties because of <i>dbacl</i>'s limit of 30 character tokens, and possibly statistical issues in recognizing similar but not identical board configurations.
+<p>
+Perhaps most interestingly overall, it should be remembered that <i>dbacl</i>
+<i>doesn't think ahead</i> like most chess engines do. Its successes and
+failures are almost entirely based on the historical record of the
+game as it develops and mimicry of training games, not at all on calculating moves and
+countermoves in the future.
+<p>
+Download the latest dbacl chess engine: <a href="chess/dce.sh">dce.sh</a>
+<p>
+<h2>Post Scriptum</h2>
+<p>
+After this essay was written, it <a href="http://games.slashdot.org/article.pl?sid=05/07/20/0317215&tid=156&tid=111&tid=10">appeared on slashdot</a>. This resulted in some interesting comments and emails. I've selected some of them
+below and added some responses.
+<p>
+<dl>
+  <dt>
+      <i>aug24 writes on slashdot
+      "For example, it currently uses entire games to
+      compare. So if it comes across an unusual opening,
+      even one close to a standard one, it's not able to
+      decide effectively. Perhaps something using game
+      fragments would be possible, then it might
+      reproduce structured plays even when the previous
+      game play has been unusual."</i>
+  </dt>
+  <dd><p>
+      It's true that in the essay, the full game is scored from the beginning,
+      but this is only for convenience. For the actual decisions, solely the
+      last few moves matter (how many depends on the -w switch), and the extra
+      score contributions from the beginning are identical for all possible
+      choices, so cancel out in the final decision. The beginnings of the games
+      could be cut away before scoring, but this would be more work and would
+      make no difference in the way dbacl plays chess.
+  </dd>
+
+  <dt>
+      <i>N3Roaster writes on slashdot
+      "I've got one. I read somewhere that high level
+       chess players don't view the current game
+       state so much in terms of exactly where each
+       piece is, but in terms of piece groupings. I'm
+       more of a go player myself, but it seems like
+       that would probably be right. Perhaps a richer
+       yet more abstract structure representing game
+       state would be better. In this way, situations
+       where the structure of play dynamics are the
+       same even while the key pieces are in
+       different positions could be picked up on.
+       This combined with your game fragment notion
+       would probably allow the chess filter to learn
+       much faster."</i>
+  </dt>
+  <dd><p>
+      Other representations besides PGN are certainly possible and worth
+      trying. Since dbacl learns patterns directly from input text, it
+      is first necessary to convert the training games into such another
+      representation, then the current game must also be available in this
+      representation during play.
+      <p>
+  </dd>
+
+  <dt>
+      <i>pclminion writes on slashdot
+      "I'm sure people have thought of it before, but
+       they haven't done it because it's clear that
+       it can't work unless it's given an infinite
+       context of moves. Otherwise, you can set the
+       computer up to fail by creating a situation
+       near the beginning of the midgame and then
+       playing out a line that traps the computer as
+       soon as it runs out of context.
+       It is also limited to what it learns by
+       "observing" other games. So it can never move
+       creatively or unexpectedly."</i>
+  </dt>
+  <dd><p>
+      dbacl does not operate this way. It is not limited to
+      matching known sequences which were seen in the training
+      games, but instead predicts likelihoods for never before seen sequences
+      from its model by generalization. There is no need for an infinite
+      context of moves, the model is in fact learned from a limited number of
+      training games, and once learned, it can handle any game sequence
+      "creatively", since such a sequence is decomposed into known and unknown
+      fragments and recombined through the rules of probability.
+      The dbacl chess engine can also move "unexpectedly", either because
+      the model differs from a player's expectation, or becasue of the
+      randomization step explained at the end of the essay.
+      <p>
+  </dd>
+
+  <dt>
+      <i>mrthoughtful writes on slashdot
+      "It would never get to beat modern computer chess
+       programs, as it depends upon a database of previous
+       games that are similar to the current game played, and
+       has no scope for examining possible futures."</i>
+  </dt>
+  <dd><p>
+      While it is true that in the essay, dbacl predicts the next move
+      by examining the immediate past, there is nothing inherently
+      impossible about predicting several moves ahead. With some work,
+      the engine can be modified to generate all the game sequences which
+      are two or more moves into the future, and dbacl will happily score
+      each such sequence as well.
+      However, the fundamental difficulty with
+      chess is that the number of game sequences grows exponentially with
+      the number of predicted moves, so the computational cost of predicting
+      several moves into the future grows very quickly.
+      <p>
+  </dd>
+
+  <dt>
+      <i>Steinfiend writes on slashdot
+      "So a
+       Chess playing Bayesian filter isn't necessarily 100%
+       useful now, but what they learned from doing it might
+       be able to be applied in some other situation. Maybe
+       they can reapply whatever they learned back into spam
+       filtering and improve all of our in-boxes."</i>
+  </dt>
+  <dd><p>
+      Perhaps a different way of saying this is that both spam
+      filtering and this chess playing experiment exhibit common
+      weaknesses. For example, currently the dbacl chess engine
+      has difficulty adapting to the middle and end games. This is
+      difficult because there is no simple boundary between the phases
+      of a chess game. Similarly, general emails have a complicated structure
+      but it can be hard to distinguish its semantic parts. A message
+      can switch from being professional to personal etc. This weakness is
+      hard to observe in spam filtering, but much easier to see in the
+      chess experiment.
+      <p>
+  </dd>
+
+  <dt>
+      <i>Chris_Mir writes on slashdot
+      "I can imagine, depending on how many games are played and
+       the available memory space, that it will develop to have a
+       decent opening. But nothing more then that." and
+      aug24 responds "Absolutely, because it is effectively playing with
+       complete games in order to do well, which is
+       equivalent to making a tree of every possible chess
+       move from the start - a rather big data set.</i>
+  </dt>
+  <dd><p>
+      dbacl doesn't remember full trees, it picks up game fragments of
+      a certain number of moves and uses these to analyze unknown and longer
+      sequences using Bayesian theory. The openings are learned more quickly
+      because everyone starts with the same initial board setup, and there
+      are only a handful of very popular openings in training games.
+      <p>
+  </dd>
+
+  <dt>
+      <i>Flyboy Connor writes on slashdot
+      "The premise of a Bayesian filter is that is learns
+       sequences of words, or characters, or whatever. Spam-chess
+       learns sequences of moves. This premise is wrong, since
+       good moves are related to complete board positions, not to
+       what was done in the previous few moves.
+       Of course, the longer your string of moves is, the better
+       it will represent the board position, especially during
+       the opening phase of the game. And the example the article
+       provides of reasonable play of spam-chess, is actually
+       from the game's opening, where the learned sequences
+       indeed represent the complete game.
+       For the middle game, however, spam chess will perform
+       badly, always."</i>
+  </dt>
+  <dd><p>
+      This is a good comment. It's true that chess requires an understanding
+      of the board positions, and the PGN format is very limited in
+      this respect (however, the PGN sequence is indirectly equivalent
+      to a full board representation, since it is possible to reconstruct the
+      board from such a sequence). However, it does not follow that
+      this approach must always perform badly in the middle game. Chess is
+      a combination of both strategy and tactics, and tactical thinking is
+      confined to a small number of consecutive moves, precisely what dbacl
+      tends to pick up. A good tactician can play well in the middle game,
+      even if he is a bad strategist.
+      <p>
+  </dd>
+
+  <dt>
+      <i>m50d writes on slashdot
+      "How about applying it differently, getting it to learn
+       to pick a move for each position? Obviously that's a
+       little harder than a simple spam/not spam judgement,
+       but I'd have thought you could get it to recognise
+       that if there are 3 pawns in front of the king and you
+       have a rook available you can do a back rank mate,
+       etc."</i>
+  </dt>
+  <dd><p>
+      This can be done by using an appropriate choice of representation.
+      The PGN format is not the only possible format for representing chess.
+      The FEN format represents the full board, and a hybrid representation
+      could include any features of interest. One could represent each
+      game as a sequence of FEN positions. dbacl has a limit on the length
+      of words which makes using straight FEN impractical, but the positions
+      could just as well be compressed by using a hash function.
+      <p>
+  </dd>
+
+  <dt>
+      <i>barawn writes on slashdot
+      "I think the main limitation - not being able to
+       understand values of exchanges - is probably the
+       biggest problem. It's also the easiest to fix, as you
+       can just write a program to add the piece that's being
+       taken (i.e. instead of Bxc4, you'd have BxBc4). The
+       relative value of each piece can be determined just
+       from the number of times an exchange happens for
+       winners."</i>
+  </dt>
+  <dd><p>
+      Nice idea. Does anyone want to try?
+      <p>
+  </dd>
+
+  <dt>
+      <i>aridg writes on slashdot
+      "Reading this article, I was reminded of the old children's
+       story about "stone soup". You remember that one -- someone
+       advertises that he can make soup from a stone, and various
+       others gather around to watch this amazing feat. Well, the
+       soup needs a little extra seasoning, so he gets someone to
+       put in some carrots while the stone cooks, then he adds
+       some onions, etc, etc... I think you can see where this is
+       going.
+       Sure you can make a chess playing program from a spam
+       filter.
+       You just need to throw in a legal move generator, and a
+       game database, and some capture heuristics, and position
+       displayer, etc, etc..."</i>
+  </dt>
+  <dd><p>
+      This is an interesting criticism, but is problematic on inspection.
+      What does it take to play chess? Since a game is defined as a sequence
+      of legal moves, there is nothing optional about a legal move generator.
+      Imagine if two people are playing chess, and one tries an illegal
+      move. The opponent will point out the mistake and refuse to allow it.
+      The first person will try again until a legal move is found.
+      Statistically, dbacl could learn to distinguish legal from illegal moves
+      in any one board position by observing enough training games,
+      ie the illegal moves can be learned
+      to have arbitrarily small probabilities. However, in a real game the
+      opponent won't allow illegal moves, so dbacl would continue to generate
+      moves until it obtains a legal move. Mathematically, this is equivalent
+      to using a move generator like SAN, but using SAN is faster. Similar
+      comments apply to the other criticisms.
+      <p>
+  </dd>
+
+  <dt>
+      <i>lawrenqj writes on slashdot
+      "Well actually Bayesian filters aught to be able to
+       discard inserted "noise". I'm not sure how the package
+       the article pointed out works, but usually the attempt
+       at pattern recognition accounts for either noise or
+       randomization and finds appropriate matches despite
+       small changes. So a bad move on the human's part
+       should be ignored by the filter. I'm not sure it would
+       be able to take advantage of the situation though."</i>
+  </dt>
+  <dd><p>
+      This is correct. dbacl builds a statistical model from the training
+      games. The model handles noise as appropriate via the rules
+      of probability and the model assumptions. In other words, when
+      a sequence of moves is analysed, it is decomposed into known
+      subsequences and unknown subsequences, which are combined through
+      a Bayesian weighting mechanism which depends on the model. In this
+      way, all relevant training sequences, even if they only overlap
+      partially, are used to predict the scores of a game.
+      <p>
+  </dd>
+
+  <dt>
+      <i>blacksky writes on slashdot
+      "Someone alluded to the Wargames movie/book. Which begs the
+       question: would you see an improvement if you set the
+       bayesian filter against itself, and fed the resulting
+       games back into its knowledge base? Would favouring the
+       shorter games in this feedback loop improve it further?"</i>
+  </dt>
+  <dd><p>
+      This could be an interesting experiment. The chess engine presented in
+      the essay is incomplete, it only plays Black, but with some work it
+      can be completed. I don't know if playing against itself is a good
+      idea. It might help to extract the likely moves, but it might also
+      cause degeneration similar to incest.
+      <p>
+  </dd>
+
+  <dt>
+      <i>Chuckstar writes on slashdot
+      "What if you ignore the 'x' altogether.
+       Specifically, delete all the 'x's before running anything
+       through dbacl. Put back the 'x' where necessary in
+       returning the move to the chess program.
+       That way Nxd5 = Nd5
+       The idea being that whether or not you make a specific
+       move is not always dependent on whether you make a
+       capture. Sometimes you just want the piece on that spot on
+       the board. The program currently treats those two
+       instances (moving a piece for a to b, and moving a piece
+       from a while capturing the piece at b) as different moves,
+       so that the presence of a piece at b alters the outcome of
+       the decision process."</i>
+  </dt>
+  <dd><p>
+      This is an idea worth trying. However, if dbacl never sees
+      an 'x' in the training games, then it will assign any move containing
+      an 'x' during play a low probability, identical for all capturing moves.
+      This would make it even more reluctant to capture pieces naturally,
+      and give no way of choosing which pieces should be captured. A simple
+      way to make things work correctly would be to remove all the 'x'
+      from the training
+      games and train on both the old games containing 'x', and the same games
+      where the 'x' is missing. 
+      <p>
+  </dd>
+
+  <dt>
+      <i>Eric Towers writes in an email
+      "[I] wondered if dbacl would play better if instead of learning
+      multi-move sequences, it learned {board state, next move} pairs."
+      </i>
+  </dt>
+  <dd><p>
+      It's possible. I only tried the simplest things in the essay, but that
+      approach is very promising. You don't actually have to represent the
+      full board state, for example you might also represent a slightly
+      higher level state which tells things like the number and values of
+      important pieces etc.
+      <p>
+  </dd>
+
+  <dt>
+      <i>John Kipling Lewis writes in an email
+      "Also, as end games are probably going to be a bit of a bother, it
+      would be nice to select a sub-section of possible moves when in the
+      middle game and then compare their LAST 7 moves as an additional
+      modifier."</i>
+  </dt>
+  <dd><p>
+      While I didn't do it in the writeup, it is certainly possible to
+      generate more than a single move ahead and apply the same scoring
+      method. In principle, up to 7 moves could be generated, although the
+      exponential branching will always pose a practical problem just as in
+      real chess engines.
+
+      It's an interesting question however because it isn't obvious I
+      think if this might help or not. It might help because it's a
+      form of educated guessing where the opponent's moves are filled
+      in from experience with a large collection of games, but it
+      might not help because it would amount to wishful thinking, that
+      the opponent behaves like in the training games.
+
+      In the best case, it would amount to an effective doubling of the
+      sequence
+      length from 7 to about 14, since the calculations would involve all the
+      overlapping 7-move (or less) sequences straddling the current move.
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+  <dt>
+  </dt>
+  <dd><p>
+      <p>
+  </dd>
+
+</dl>
+</body>
+</html>

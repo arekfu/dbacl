@@ -1,0 +1,103 @@
+\" t
+.TH SPHERECL 1 "Bayesian Text Classification Tools" "Version @VERSION@" ""
+.SH NAME
+sphercl \- a spam header reweighting classifier for binary email filtering.
+.SH SYNOPSIS
+.HP
+.B spherecl
+[-@]
+-C
+.I category1:category2
+[-l
+.I category]
+[FILE]...
+.HP
+.B spherecl
+-V
+.SH DESCRIPTION
+.PP 
+.B THIS TOOL IS NOT READY FOR USE. IT IS A WORK IN PROGRESS.
+.PP
+.B spherecl
+is a (binary) Bayesian email classifier. 
+It expects one or more FILE(s) containing single email messages in
+RFC2822 format, and outputs for each a best guess category name, which
+is either category1 or category2. If the 
+.B -l
+switch is used, spherecl learns the messages in FILE(s) as examples of
+the category (which must be one of category1 or category2), rather than
+classifying the messages.
+.PP
+spherecl in fact delegates some of its work to dbacl(1)
+behind the scenes. Essentially, it modifies the dbacl scores to
+retroactively give more weight to header tokens in such a way as to
+try to maximize the binary classification ROC score.
+.PP
+Because spherecl must make certain assumptions about the dbacl output, it
+contains a hardcoded list of command line options for dbacl. These options
+cannot be adjusted, however it is possible to pass additional options
+to dbacl if desired (not recommended).
+.SH EXIT STATUS
+The normal shell exit conventions aren't followed (sorry!). When using the
+.B -l
+command form,
+.B spherecl
+returns zero on success, nonzero if an error occurs. When using the
+.B -c
+form,
+.B spherecl
+returns a positive integer corresponding to the best
+.IR category .
+If an error occurs,
+.B spherecl
+returns zero.
+.SH OPTIONS
+.IP -@
+This is a marker switch. It can be used to tell spherecl to stop analyzing
+switches that follow the marker. These switches will be passed on to the 
+dbacl child process verbatim. Note that spherecl expects the mandatory
+.B -l
+or
+.B -c
+switches to be used before 
+.IR -@ .
+Use with caution.
+.IP -C
+This switch is mandatory. It identifies the binary model uses by spherecl.
+.IP -l
+When this switch is used, spherecl considers each FILE to be a mail message
+that must be learned as an example of category. Note that when this switch
+is absent, spherecl will classify each FILE as one of category1 or category2.
+.SH USAGE
+.PP
+See the documentation for dbacl regarding email filtering.
+.SH ENVIRONMENT
+.PP
+.IP DBACL_PATH
+When this variable is set, its value is prepended to every
+.I category
+filename which doesn't start with a '/' or a '.'.
+.SH SOURCE
+.PP
+The source code for the latest version of this program is available at the
+following locations:
+.PP
+.na
+http://www.lbreyer.com/gpl.html
+.br
+http://dbacl.sourceforge.net
+.ad
+.SH AUTHOR
+.PP
+Laird A. Breyer <laird@lbreyer.com>
+.SH SEE ALSO
+.PP
+.BR dbacl (1),
+.BR bayesol (1),
+.BR hmine (1),
+.BR hypex (1),
+.BR mailcross (1),
+.BR mailfoot (1),
+.BR mailinspect (1),
+.BR mailtoe (1)
+

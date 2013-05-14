@@ -1,0 +1,98 @@
+#!/bin/sh
+# builds an audit file audit/index.html with graphical displays of the scores
+# initialize: $2 is working dir
+# train: $2 is correct class $3 is message file
+# finalize: 
+
+. ./share/dbacl/TREC/OPTIONS
+
+printheader() {
+    SOPT=`cat "$1/share/dbacl/TREC/OPTIONS"`
+    cat > "$1/audit/index.html" <<EOF1
+<html>
+<title>Simulation Audit</title>
+<body>
+<p>
+Simulation options:
+<pre>
+$SOPT
+</pre>
+<hr>
+<p>
+<table cols='6' width='850'>
+EOF1
+}
+
+printfooter() {
+    FP=`cat ./audit/scores | grep 'ham spam' | wc -l`
+    FN=`cat ./audit/scores | grep 'spam ham' | wc -l`
+    TM=`cat ./audit/scores | wc -l`
+    cat >> ./audit/index.html <<EOF3
+</table>
+<p>
+False positives = $FP<br>False negatives = $FN<br>Total messages = $TM
+</body>
+</html>
+EOF3
+}
+
+printdata() {
+# preparations
+COUNT=`cat ./audit/COUNT`
+echo `expr $COUNT + 1` > ./audit/COUNT
+OUTFILE=`echo $2 | md5sum | sed 's/ .*$//'`
+VERDICT=`./bin/dbacl -m -UP -c ./db/spam -c ./db/ham $2 2>/dev/null`
+CLASSTYPE=`expr "$VERDICT" : '\(.*\) #'`
+FULLSCORES=`./bin/dbacl -m -vUP -c ./db/spam -c ./db/ham $2 2>/dev/null`
+FROM=`cat $2 | grep -m 1 '^From:' | sed 's/^.*<//;s/>.*$//' | tr '[:punct:]' '_'`
+SUBJECT=`cat $2 | grep -m 1 '^Subject:' | sed 's/\(.\{0,40\}\).*/\1/' | tr '[:punct:]' '_'`
+./bin/dbacl -m -c ./db/spam -c ./db/ham $2 -UPd | grep '^ ' > "./audit/$OUTFILE.tmp" 2>/dev/null
+echo "# $1 $2" > "./audit/$OUTFILE.txt"
+./bin/dbacl -m -c ./db/spam -c ./db/ham $2 -vPd >> "./audit/$OUTFILE.txt" 2>/dev/null
+
+VOCAB1=`echo $FULLSCORES | tr -s ' ' | cut -f11 -d' '`
+VOCAB2=`echo $FULLSCORES | tr -s ' ' | cut -f22 -d' '`
+
+# graphical stuff
+cat > ./audit/cmd.gnuplot <<EOF2
+set title "$VERDICT $FROM $SUBJECT"
+set terminal png
+set output "./audit/$OUTFILE.png"
+set yrange [0:30]
+plot "./audit/$OUTFILE.tmp" using (\$0):1:(sqrt(\$5)) w yerrorlines pt 1 ps 1 title "spam", "./audit/$OUTFILE.tmp" using (.5+\$0):6:(sqrt(\$10)) w yerrorlines pt 2 ps 1 title "ham"
+EOF2
+gnuplot ./audit/cmd.gnuplot 2>/dev/null
+
+if [ "$1" != "$CLASSTYPE" ]; then
+    convert -quiet -negate "./audit/$OUTFILE.png" "./audit/$OUTFILE.png.neg" 2>/dev/null
+    mv "./audit/$OUTFILE.png.neg" "./audit/$OUTFILE.png"
+fi
+
+convert -quiet -thumbnail 50x50 "./audit/$OUTFILE.png" "./audit/$OUTFILE.thumb.png" 2>/dev/null
+
+# output table row
+
+if [ -n "$FULLSCORES" ]; then
+    echo "$1 $VERDICT $FULLSCORES" >> "./audit/scores"
+
+    # note keep table row on a single line, then it is easy to grep and filter
+    cat >> "./audit/index.html" <<EOF4
+<tr><td width='50'>$COUNT</td><td width='50'>$1</td><td width='100'><a href='./$OUTFILE.txt'>$VERDICT</a></td><td width='100'>$VOCAB1 $VOCAB2</td><td width='50'><a href='./$OUTFILE.png'><img src='./$OUTFILE.thumb.png'></a></td><td width='500'><a href='./../$2'>$FROM</a></td></tr>
+EOF4
+fi
+# clean up
+rm -f "./audit/$OUTFILE.tmp"
+}
+
+case "$1" in
+    initialize)
+	printheader "$2"
+	echo "0" > "$2/audit/COUNT"
+	;;
+    train)
+	printdata "$2" "$3"
+	;;
+    finalize)
+	printfooter
+	;;
+esac

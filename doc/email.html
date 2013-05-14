@@ -1,0 +1,518 @@
+<html>
+<title>Email classification with dbacl</title>
+<body>
+<h1><center>Email classification with dbacl</center></h1>
+<center><p>Laird A. Breyer</p></center>
+<h2>Introduction</h2>
+<p>
+<a href="http://www.lbreyer.com/gpl.html">dbacl</a> is a UNIX/POSIX command line
+toolset which can be used in scripts to classify a single email among one
+or more previously learned categories.
+<p>
+<a href="http://www.lbreyer.com/gpl/dbaclman.html">dbacl</a>(1) supports several different statistical models and several different tokenization
+schemes, which can be adjusted to trade in speed and memory performance for
+statistical sophistication. <b>dbacl</b>(1) also permits the user to select cost weightings
+for different categories, thereby permitting simple adjustments to the
+type I and type II errors (a.k.a. false positives, etc.). Finally,
+<b>dbacl</b>(1) can print confidence percentages which help decide when
+a decision is ambiguous.
+<p>
+<b>dbacl</b>(1)
+is a general purpose text classifier which can understand email message formats.
+The <a href="http://www.lbreyer.com/dbacltut.html">tutorial</a> explains general classification only. It is worth reading (of course :-), but doesn't describe the extra steps necessary
+to enable the email functionality. This document describes the necessary switches and caveats from first principles.
+<p>
+You can learn more about the dbacl suite of utilities (e.g <a href="http://www.lbreyer.com/dbaclman.html">dbacl</a>,
+<a href="http://www.lbreyer.com/bayesolman.html">bayesol</a>,
+<a href="http://www.lbreyer.com/mailinspectman.html">mailinspect</a>,
+<a href="http://www.lbreyer.com/mailcrossman.html">mailcross</a>) by typing for example:
+<pre>
+% man dbacl
+</pre>
+<p>
+<h2>Before you begin</h2>
+<p>
+A statistical email classifier cannot work unless you show it some (as many as you can)
+examples of emails for every category of interest. This requires some work, because you must
+separate your emails into dedicated folders. dbacl works best with mbox style folders, which are
+the standard UNIX folder type that most mailreaders can import and export.
+<p>
+We'll assume that you want to define two categories
+called <i>notspam</i> and <i>spam</i> respectively. If you want <b>dbacl</b>(1) to recognize these categories, please take a moment to create two mbox folders named (for example) <i>$HOME/mail/spam</i> and <i>$HOME/mail/notspam</i>.
+You must make sure that the <i>$HOME/mail/notspam</i> folder doesn't contain any unwanted messages, and
+similarly <i>$HOME/mail/spam</i> must not contain any wanted messages. If you mix messages in the two folders, <b>dbacl</b>(1) will be somewhat confused, and its classification accuracy will drop.
+<p>
+<i>
+If you've used other Bayesian spam filters, you will find that <b>dbacl</b>(1) is slightly different. While other filters can sometimes learn incrementally, one message at a time,
+dbacl always learns from scratch all the messages you give it, and only those. dbacl is optimized for learning a large number of messages quickly in one go, and to classify messages as fast as possible afterwards. The author has several good reasons for this choice, which are beyond the scope of this tutorial. 
+</i>
+<p>
+As time goes by, if you use <b>dbacl</b>(1) for classification, you will probably set up your filing system so that messages identified as <i>spam</i> go automatically into the <i>$HOME/mail/notspam</i> folder,
+and messages identified as <i>notspam</i> go into the <i>$HOME/mail/notspam</i> folder.
+<b>dbacl</b>(1) is far from perfect, and can make mistakes. This will result in messages going to the wrong folder. When <b>dbacl</b>(1) relearns, it will become slightly confused and over time its ability to distinguish <i>spam</i> and <i>notspam</i> will be diminished.
+<p>
+As with all email classifiers which learn your email, you should inspect your folders regularly,
+and if you find messages in the wrong folder, you must move them to the correct folder before relearning. If you keep your mail folders clean for learning, <b>dbacl</b>(1) will eventually make very
+few mistakes, and you will have plenty of time to inspect the folders once in a while. Or so the theory goes...
+<p>
+Since <b>dbacl</b>(1) must relearn categories from scratch each time, you will
+probably want to set up a <b>cron</b>(1) job to relearn your mail folders
+every day at midnight. This tutorial explains how to do this below.
+If you like, you don't need to relearn periodically at all. The author relearns
+his categories once every few months, without noticeable loss. This works
+as long as your mail folders contain enough representative emails for training.
+<p>
+<b>
+Last but not least, if after reading this tutorial you have trouble to get
+classifications working, please read <a href="is_it_working.html">is_it_working.html</a>.
+</b>
+<p>
+<h2>Basic operation: Learning</h2>
+<p>
+To learn your <i>spam</i> category, go to the directory containing your
+<i>$HOME/mail/notspam</i> folder (we assume mbox type here) and at the command prompt (written %), type:
+<pre>
+% dbacl -T email -l spam $HOME/mail/spam
+</pre>
+<p>
+This reads all the messages in $HOME/mail/notspam one at a time, ignoring certain mail
+headers and attachments, and also removes HTML markup. The result is a binary
+file called <i>spam</i>, which can be used by dbacl for classifications.
+This file is a snapshot, it cannot be modified by learning extra mail messages.
+(unlike other spam filters, which sometimes let you learn incrementally, 
+see below for discussion).
+<p>
+If you get warning messages about the hash size being too small,
+you need to increase the memory reserved for email tokens. Type:
+<pre>
+% dbacl -T email -H 20 -l spam $HOME/mail/spam
+</pre>
+<p>
+which reserves space for up to 2^20 (one million) unique words. The
+default <b>dbacl</b>(1) settings are chosen to
+limit dramatically the memory requirements (about 32 thousand tokens). Once the limit is reached,
+no new tokens are added and your category models will be strongly skewed towards the first few emails read. Heed the warnings.
+<p>
+If your spam folder contains too many messages, you can tell <b>dbacl</b> to pick the emails to be learned randomly. This is done by using the decimation switch <i>-x</i>. For example,
+<pre>
+% dbacl -T email -H 20 -x 1 -l spam $HOME/mail/spam
+</pre>
+will learn only about 1/2 or the emails found in the <i>spam</i> folder. Similarly, <i>-x 2</i> would learn about 1/4, <i>-x 3</i> would learn about 1/8 of available emails. 
+<p>
+<b>dbacl</b>(1) has several options designed to control the way email messages are
+parsed. The man page lists them all, but of particular interest are the <i>-T</i>
+and <i>-e</i> options. 
+<p>
+If your email isn't kept in mbox format, <b>dbacl</b>(1) can open one or more directories
+and read all the files in it. 
+For example, if your messages are stored in the directory <i>$HOME/mh/</i>, one file per email,
+you can type
+<pre>
+% dbacl -T email -l spam $HOME/mh
+</pre>
+At present, <b>dbacl</b>(1) won't read the subdirectories, or look at the file names
+to decide whether to read some messages and not others. 
+Another (but not necessarily faster) solution is to temporarily
+convert your mail into an mbox format file and use that for learning:
+<pre>
+% find $HOME/mh -type f | while read f; \
+    do formail <$f; done | dbacl -T email -l spam 
+</pre>
+<p>
+It is not enough to learn <i>$HOME/mail/notspam</i> emails, you must also learn the
+<i>$HOME/mail/notspam</i> emails. <b>dbacl</b>(1) can only choose among the categories which have been previously learned. It
+cannot say that an email is unlike <i>spam</i> (that's an open ended statement), only that an
+email is like <i>spam</i> or like <i>notspam</i> (these are both concrete statements). To learn
+the <i>notspam</i> category, type:
+<pre>
+% dbacl -T email -l notspam $HOME/mail/notspam
+</pre>
+<p>
+Make sure to use the same switches for both <i>spam</i> and <i>notspam</i> categories.
+Once you've fully read the <a href="http://www.lbreyer.com/dbaclman.html">man</a> page later, you can start to mix and match switches.
+<p>
+Every time <b>dbacl</b>(1) learns a category, it writes
+a binary file containing the statistical model into the hidden directory <i>$HOME/.dbacl</i>,
+so for example after learning the category <i>spam</i>, you will have a small file named <i>$HOME/.dbacl/spam</i> which contains everything <b>dbacl</b>(1) learned. The file is recreated from scratch each time you relearn <i>spam</i>, and is loaded each time you classify an email.
+<p>
+<h2>Basic operation: Classifying</h2>
+<p>
+Suppose you have a file named <i>email.rfc</i> which contains the body of a single email
+(in standard RFC822 format).
+You can classify the email into either <i>spam</i> or <i>notspam</i> by typing:
+<pre>
+% cat email.rfc | dbacl -T email -c spam -c notspam -v
+notspam
+</pre>
+<p>
+All you get is the name of the best category, the email itself is consumed.
+A variation of particular interest is to replace -v by -U, which gives
+a percentage representing how sure dbacl is of printing the correct category.
+<pre>
+% cat email.rfc | dbacl -T email -c spam -c notspam -U
+notspam # 67%
+</pre>
+<p>
+A result of 100% means dbacl is very sure of the printed category, while
+a result of 0% means at least one other category is equally likely.
+If you would like to see separate scores for each category, type:
+<pre>
+% cat email.rfc | dbacl -T email -c spam -c notspam -n
+spam 232.07 notspam 229.44
+</pre>
+<p>
+The winning category always has the smallest score (closest to zero). In fact, the numbers returned with
+the <i>-n</i> switch can be interpreted as unnormalized distances towards each category from the input document, in a mathematical space of high dimensions.
+If you prefer a return code,
+<b>dbacl</b>(1) returns a positive integer (1, 2, 3, ...)
+identifying the category by its position on the command line. So if you type:
+<pre>
+% cat email.rfc | dbacl -T email -c spam -c notspam
+</pre>
+<p>
+then you get no output, but the return code is 2. If you use the <b>bash</b>(1) shell, the return code
+for the last run command is always in the variable $?.
+<p>
+<h2>Basic operation: Scripts</h2>
+<p>
+There is generally
+little point in running the commands above by hand, except if you want to understand
+how <b>dbacl</b>(1) operates, or want to experiment with switches.
+<p>
+Note, however, that simple scripts often do not check for error and warning messages on
+<i>STDERR</i>. It is always worth rehearsing the operations you intend to script, as
+<b>dbacl</b>(1) will let you know on
+<i>STDERR</i> if it encounters problems during learning. If
+you ignore warnings, you will likely end up with suboptimal classifications,
+because the dbacl system prefers to do what it is told predictably,
+rather than stop when an error condition occurs.
+<p>
+Once you are ready for spam filtering, you need to handle two issues.
+<p>
+The first issue is when and how to learn.
+<p>
+You should relearn your categories whenever you've received an appreciable number of emails or whenever you like. Unlike other spam filters, dbacl cannot
+learn new emails incrementally and update its category files. Instead, you
+must keep your messages organized and <b>dbacl</b>(1) will take a snapshot.
+<p>
+<i>This limitation is actually advantageous in the long run, because it forces you to
+keep usable archives of your mail and gives you control over every message
+that is learned. By contrast, with incremental learning you must remember
+which messages have already been learned, how many times, and whether to unlearn
+them if you change your mind.</i>
+<p>
+A dbacl category model normally doesn't change dramatically if you add a single new email (provided the
+original model depends on more than a handful of emails). Over time, you 
+can even stop learning altogether when your error rate is low enough.
+The simplest strategy for continual learning is a <b>cron</b>(1) job run once a day:
+<pre>
+% crontab -l > existing_crontab.txt
+</pre>
+<p>
+Edit the file <i>existing_crontab.txt</i> with your favourite editor and add the following
+three lines at the end:
+<pre>
+CATS=$HOME/.dbacl
+5 0 * * * dbacl -T email -H 18 -l $CATS/spam $HOME/mail/notspam
+10 0 * * * dbacl -T email -H 18 -l $CATS/notspam $HOME/mail/notspam
+</pre>
+<p>
+Now you can install the new crontab file by typing
+<pre>
+% crontab existing_crontab.txt
+</pre>
+<p>
+The second issue is how to invoke and what to do with the dbacl classification.
+<p>
+Many UNIX systems offer <a href="http://www.procmail.org">procmail</a>(1)
+for email filtering. <b>procmail</b>(1) can pipe a copy of each incoming email into <b>dbacl</b>(1), and use the
+resulting category name to write the message directly to the appropriate mailbox.
+<p>
+To use procmail, first verify that the file
+<i>$HOME/.forward</i> exists and contains the single line:
+<pre>
+|/usr/bin/procmail
+</pre>
+<p>
+Next, create the file <i>$HOME/.procmailrc</i> and make sure it contains something like this:
+<pre>
+PATH=/bin:/usr/bin:/usr/local/bin
+SHELL=/bin/bash
+MAILDIR=$HOME/mail
+DEFAULT=$MAILDIR/inbox
+
+#
+# this line runs the spam classifier
+#
+:0 
+YAY=| dbacl -vT email -c $HOME/.dbacl/spam -c $HOME/.dbacl/notspam
+
+#
+# this line writes the email to your mail directory
+#
+:0:
+* ? test -n "$YAY"
+# if you prefer to write the spam status in a header,
+# comment out the first line and uncomment the second
+$MAILDIR/$YAY
+#| formail -A "X-DBACL-Says: $YAY" >>$DEFAULT
+
+#
+# last rule: put mail into mailbox
+#
+:0:
+$DEFAULT
+</pre>
+<p>
+The above script will automatically file your incoming email into one of two folders named <i>$HOME/mail/spam<i> and <i>$HOME/mail/notspam</i> respectively (if you have a POP account, and your mailreader contacts your ISP directly, this won't work. Try using <b>fetchmail</b>(1)).
+<p>
+<h2>Advanced operation: Costs</h2>
+<p>
+<i>This section can be skipped. It is here for completeness, but probably
+won't be very useful to you, especially if you are a new user.</i>
+<p>
+The classification performed by <b>dbacl</b>(1) as described above is known as a <i>MAP</i>
+estimate. The optimal category is chosen only by looking at the email contents. What is missing is your input
+as to the costs of misclassifications.
+<p>
+<i>
+This section is by no means necessary for using <b>dbacl</b>(1) for most
+classification tasks. It is useful for tweaking dbacl's algorithms only.
+If you want to improve dbacl's accuracy, first try to learn bigger collections
+of email.
+</i>
+<p>
+To understand the idea, imagine that an email being wrongly marked <i>spam</i> is likely to be
+sitting in the <i>$HOME/mail/spam</i> folder until you check through it, while an email wrongly marked <i>notspam</i> will prominently appear among your regular correspondence. For most people, the former case can mean a missed timely communication, while the latter case is merely an annoyance.
+<p>
+No classification system is perfect. Learned emails can only imperfectly predict never before seen emails. Statistical models vary in quality. If you try to lower one kind of error, you automatically increase the other kind.
+<p>
+The <a href="http://www.lbreyer.com/gpl">dbacl</a> system allows you to specify how much you hate each type of misclassification, and does its best to accomodate this extra information. To input your settings, you will need a risk specification like this:
+<pre>
+categories {
+    spam, notspam
+}
+prior {
+    1, 1
+}
+loss_matrix {
+"" spam      [            0,  1^complexity ]
+"" notspam   [ 2^complexity,  0            ]
+}
+</pre>
+<p>
+This risk specification states that your cost for misclassifying spam emails into <i>notspam</i> is 1 for every word of the email (merely an annoyance). Your cost for misclassifying regular emails into <i>spam</i> is 2 for every word of the email (a more serious problem). The costs for classifying your email correctly are zero in each case. Note that the cost numbers are arbitrary, only their relative sizes matter. See the <a href="http://www.lbreyer.com/dbacltut.html">tutorial</a> if you want to understand these statements.
+<p>
+Now save your risk specification above into a file named <i>my.risk</i>, and type
+<pre>
+% cat email.rfc | dbacl -T email -c spam -c notspam \
+  -vna | bayesol -c my.risk -v
+notspam
+</pre>
+<p>
+The output category may or may not differ from the category selected via <b>dbacl</b>(1) alone, but over
+many emails, the resulting classifications will be more cautious about marking an email as <i>spam</i>.
+<p>
+Since <b>dbacl</b>(1) can output the score for each category (using the <i>-n</i> switch),
+you are also free to do your own processing and decision calculation, without using <a href="http://www.lbreyer.com/bayesolman.html">bayesol</a>(1).
+For example, you could use:
+<pre>
+% cat email.rfc | dbacl -T email -n -c spam -c notspam | \
+  awk '{ if($2 * p1 * u12 > $4 * (1 - p1) * u21) { print $1; } \
+       else { print $3; } }'
+</pre>
+<p>
+where <i>p1</i> is the a priori probability that an email is spam, <i>u12</i> is the cost of misclassifying
+spam as notspam, and <i>u21</i> is the cost of seeing spam among your regular email.
+<p>
+When you take your misclassification costs into account, it is better to use
+the logarithmic scores (given by the <i>-n</i>) instead of the true probabilities (given by the <i>-N</i> switch).
+<p>
+The scores represent the amount of evidence away from each model, so the smaller the score the better. For each category, dbacl outputs both the score and the complexity of the email (ie the number of tokens/words actually looked at). For example 
+<pre>
+% cat email.rfc | dbacl -T email -c spam -c notspam -vn
+spam 5.52 * 42 notspam 5.46 * 42
+</pre>
+would indicate that there are 5.46 bits of evidence away from <i>notspam</i>, 
+but 5.52 bits of evidence away from <i>spam</i>. This evidence is computed
+based on 42 tokens (it's a small email :-), and one would conclude that the <i>notspam</i> category is a slightly better fit.
+
+<p>
+<h2>Advanced operation: Parsing</h2>
+<p>
+<i><b>dbacl</b>(1) sets some default switches which should be acceptable
+for email classification, but probably not optimal. If you like to experiment,
+then this section should give you enough material to stay occupied, but
+reading it is not strictly necessary.</i>
+<p>
+When <b>dbacl</b>(1) inspects an email message, it only looks at certain words/tokens.
+In all examples so far,
+the tokens picked up were purely alphabetic words. No numbers are picked up, or special characters such as $, @, % and punctuation.
+<p>
+The success of text classification schemes depends not only on the statistical models used, but also strongly on the type of tokens considered. <b>dbacl</b>(1) allows you to try out different tokenization schemes. What works best depends on your email.
+<p>
+By default, <b>dbacl</b>(1) picks up only purely alphabetic words as tokens (this uses the least amount of memory). To pick up alphanumeric tokens, use the <i>-e</i> switch as follows:
+<pre>
+% dbacl -e alnum -T email -l spam $HOME/mail/notspam
+% dbacl -e alnum -T email -l notspam $HOME/mail/notspam
+% cat email.rfc | dbacl -T email -c spam -c notspam -v
+notspam
+</pre>
+<p>
+You can also pick up printable words (use <i>-e graph</i>) or purely ASCII (use <i>-e ascii</i>) tokens.
+Note that you do not need to indicate the <i>-e</i> switch when classifying, but you should make sure
+that all the categories use the same <i>-e</i> switch when learning.
+<p>
+<b>dbacl</b>(1) can also look at single words, consecutive
+pairs of words, triples, quadruples. For example, a trigram
+model based on alphanumeric tokens can be learned as follows:
+<pre>
+% dbacl -e alnum -w 3 -T email -l spam $HOME/mail/notspam
+</pre>
+<p>
+One thing to watch out for is that n-gram models require much more memory to learn in general. You will likely need to use the <i>-H</i> switch to reserve enough space.
+<p>
+If you prefer, you can specify the tokens to look at through a regular expression. The following
+example picks up single words which contain purely alphabetic characters followed by zero or more numeric characters. It can be considered an intermediate tokenization scheme between <i>-e alpha</i> and <i>-e alnum</i>:
+<pre>
+% dbacl -T email \
+  -g '(^|[^[:alpha:]])([[:alpha:]]+[[:digit:]]*)||2' \
+  -l spam $HOME/mail/notspam
+% dbacl -T email \
+  -g '(^|[^[:alpha:]])([[:alpha:]]+[[:digit:]]*)||2' \
+  -l notspam $HOME/mail/notspam
+% cat email.rfc | dbacl -T email -c spam -c notspam -v
+notspam
+</pre>
+<p>
+Note that there is no need to repeat the <i>-g</i> switch when classifying.
+<p>
+<p>
+<h2>Cross Validation</h2>
+<p>
+<i>This section explains quality control and accuracy testing, but
+is not needed for daily use.</i>
+<p>
+If you have time to kill, you might be inspired by the instructions above to write your own learning and filtering shell scripts. For example, you might
+have a script <i>$HOME/mylearner.sh</i> containing
+<pre>
+#!/bin/sh
+dbacl -T email -H 19 -w 1 -l $@
+</pre>
+<p>
+With this script, you could learn your <i>spam</i> and <i>notspam</i> emails by typing
+<pre>
+% ./mylearner.sh spam $HOME/mail/spam
+% ./mylearner.sh notspam $HOME/mail/notspam
+</pre>
+<p>
+A second script <i>$HOME/myfilter.sh</i> might contain
+<pre>
+#!/bin/sh
+dbacl -T email -vna $@ | bayesol -c $HOME/my.risk -v
+</pre>
+<p>
+With this script, you could classify an email by typing
+<pre>
+% cat email.rfc | $HOME/myfilter.sh -c spam -c notspam
+</pre>
+<p>
+What we've done with these scripts saves typing, but isn't necessarily
+very useful. However, we can use these scripts together with another
+utility, <a href="http://www.lbreyer.com/mailcrossman.html">mailcross</a>(1).
+<p>
+What <b>mailcross</b>(1) does is run an email <i>n</i>-fold
+<i>cross-validation</i>, thereby giving you an idea of the effects of
+various switches. It accomplishes this by splitting each of your <i>spam</i> and <i>notspam</i> folders (which normally are fully used up for learning categories) into
+<i>n</i> equal sized subsets. One of these subsets is chosen for testing each category, and the remaining subsets are used for learning, since you already know if they are <i>spam</i> or <i>notspam</i>. This gives you an idea how good the filter is, and how it improves (or not!) when you change switches.
+<p>
+Statistically, <i>cross-validation</i> is on very shaky ground, because it violates the fundamental principle that you must not reuse data for two different purposes, but that doesn't stop most of the world from using it. 
+<p>
+Suppose you want to cross-validate your filtering scripts above. The following
+instructions only work with mbox files. First you should type:
+<pre>
+% mailcross prepare 10
+% mailcross add spam $HOME/mail/spam
+% mailcross add notspam $HOME/mail/notspam
+</pre>
+<p>
+This creates several copies of all your <i>spam</i> and <i>notspam</i> emails
+for later testing. Your original <i>$HOME/mail/{,not}spam</i> files are not
+modified or even needed after these steps.
+<p>
+Next, you must indicate the learning and filtering scripts to use. Type
+<pre>
+% export MAILCROSS_LEARNER="$HOME/mylearner.sh"
+% export MAILCROSS_FILTER="$HOME/myfilter.sh"
+</pre>
+<p>
+Finally, it is time to run the cross validation. Type
+<pre>
+% mailcross learn
+% mailcross run
+% mailcross summarize
+</pre>
+<p>
+The results you will see eventually are based on learning about 9/10th of the emails in <i>$HOME/mail/spam</i> and <i>$HOME/mail/spam</i> respectively for each category and testing with the other 1/10th. 
+<p>
+Beware that the commands above may take a long time and have all the excitement of watching paint dry. When you get bored with cross validation, don't forget to type
+<pre>
+% mailcross clean
+</pre>
+<p>
+<h2>Comparing Email Filters</h2>
+<p>
+Provided all runs use the same test corpora, you can compare any number of
+email classifiers with the mailcross command. This helps in choosing the
+best combination of switches for learning, although it can't be stressed enough
+that the results will depend strongly on your particular set of corpora.
+<p>
+It quickly gets tedious to run the cross validator multiple times, however.
+With this in mind, mailcross(1) has a "testsuite" subcommand,
+which runs the mailcross commands successively on any number of filters.
+These filters can be various versions of dbacl with different switches, or indeed
+can be other open source email classifiers.
+<p>
+For every email classifier you wish to cross validate, you need a wrapper script
+which performs the work of the scripts <i>mylearner.sh</i> and <i>myfilter.sh</i>
+in the previous section. Since every open source email classifier has its own interface,
+the wrapper must translate the mailcross instructions into something that the
+classifier understands. At the time of writing, wrapper scripts exist for
+<a href="http://www.lbreyer.com/gpl">dbacl</a>, <a href="http://bogofilter.sourceforge.net">bogofilter</a>,
+<a href="http://www.nongnu.org/ifile/">ifile</a> and
+<a href="http://spambayes.sourceforge.net">spambayes</a>.
+The interface requirements are described in the mailcross(1) manual page.
+<p>
+Note that the supplied wrappers can be sometimes out of date for the most
+popular Bayesian filters, because these projects can change their interfaces
+frequently. Also, the wrappers may not use the most flattering combinations
+of switches and options, as only each filter author knows the best way
+to use his own filter.
+<p>
+Besides cross validation, you can also test Train On Error and Full Online
+Ordered Training schemes, via the mailtoe(1) and mailfoot(1) commands. Using
+them is very similar to using mailcross(1).
+<p>
+<h2>TREC</h2>
+<p>
+The (United States) <a href="http://www.nist.gov">National Institute of Standards and Technology</a> organises an annual conference on text retrieval called
+<a href="http://trec.nist.gov">TREC</a>, which in 2005 began a new
+track on spam filtering. A goal of this conference is to develop over
+several years a set of standard methodologies for evaluating and comparing
+spam filtering systems.
+<p>
+For 2005, the initial goal is to compare spam filters in a laboratory
+environment, not directly connected to the internet. An identical
+stream of email messages addressed to a single person
+is shown in chronological order to all
+participating filters, which can learn them incrementally and must predict
+the type of each message as it arrives. 
+<p>
+The <a href="http://plg.uwaterloo.ca/~trlynam/spamjig/spamfilterjig/">spamjig</a>
+is the automated system which performs this evaluation. You can download it
+yourself and run it with your own email collections to test any participating
+filters. Special <a href="http://www.lbreyer.com/gpl/README.TREC2005.txt">instructions</a> for dbacl can be found in the 
+TREC subdirectory of the source package. Many other open source spam filters
+can also be tested in this framework.
+</body>
+</html>
