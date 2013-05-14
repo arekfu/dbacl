@@ -406,7 +406,7 @@ typedef u_int16_t digitized_weight_t;
 #define DIGITIZED_WEIGHT_MAX ((digitized_weight_t)USHRT_MAX)
 #define DIG_FACTOR           5
 /* maximum number of categories we can handle simultaneously */
-#define MAX_CAT ((category_count_t)64)
+#define MAX_CAT ((category_count_t)16383)
 /* percentage of hash we use */
 #define HASH_FULL ((hash_percentage_t)95)
 /* alphabet size */
