@@ -135,6 +135,9 @@ double qtol_lam = CLIP_LAMBDA_TOL(0.05);
 double qtol_logz = 0.05;
 bool_t qtol_multipass = 0;
 
+// output delimiter
+char output_delimiter = ' ';
+
 /***********************************************************
  * MISCELLANEOUS FUNCTIONS                                 *
  ***********************************************************/
@@ -143,7 +146,7 @@ static void usage(/*@unused@*/ char **argv) {
   fprintf(stderr, 
 	  "\n");
   fprintf(stderr, 
-	  "dbacl [-vniNR] [-T type] -c CATEGORY [-c CATEGORY]...\n");
+	  "dbacl [-vniNRs] [-T type] -c CATEGORY [-c CATEGORY]...\n");
   fprintf(stderr, 
 	  "      [-f KEEP]... [FILE]...\n");
   fprintf(stderr, 
@@ -397,12 +400,13 @@ void score_categories() {
     }
 
     for(i = 0; i < cat_count; i++) {
-      fprintf(stdout, "%s %5.2" FMT_printf_score_t "%% ", 
+      fprintf(stdout, "%s %5.2" FMT_printf_score_t "%%",
 	      cat[i].filename, 100 * exp((cat[i].score - cmax))/c);
       if( u_options & (1<<U_OPTION_CONFIDENCE) ) {
-	fprintf(stdout, "@ %5.1f%% ", 
+	fprintf(stdout, " @ %5.1f%%",
 		(float)gamma_pvalue(&cat[i], cat[i].score_div)/10);
       }
+      fputc(output_delimiter, stdout);
     }
     fprintf(stdout, "\n");
 
@@ -416,27 +420,28 @@ void score_categories() {
     for(i = 0; i < cat_count; i++) {
       if( u_options & (1<<U_OPTION_VERBOSE) ) {
 	if( u_options & (1<<U_OPTION_VAR) ) {
-	  fprintf(stdout, "%s ( %5.2" FMT_printf_score_t 
-		  " # %5.2" FMT_printf_score_t " )* %-.1f ", 
+	  fprintf(stdout, "%s ( %5.2" FMT_printf_score_t
+		  " # %5.2" FMT_printf_score_t " )* %-.1f",
 		  cat[i].filename, 
 		  -nats2bits(sample_mean(cat[i].score, cat[i].complexity)),
 		  nats2bits(sqrt(cat[i].score_s2/cat[i].complexity)),
 		  cat[i].complexity);
 	} else {
-	  fprintf(stdout, "%s %5.2" FMT_printf_score_t " * %-.1f ", 
-		  cat[i].filename, 
+	  fprintf(stdout, "%s %5.2" FMT_printf_score_t " * %-.1f",
+		  cat[i].filename,
 		  -nats2bits(sample_mean(cat[i].score, cat[i].complexity)),
 		  cat[i].complexity);
 	}
 	if( u_options & (1<<U_OPTION_CONFIDENCE) ) {
-	  fprintf(stdout, "@ %5.1f%% ", 
+	  fprintf(stdout, " @ %5.1f%% ",
 		  (float)gamma_pvalue(&cat[i], cat[i].score_div)/10);
 	}
       } else {
-	fprintf(stdout, "%s %5.2" FMT_printf_score_t " ", 
+	fprintf(stdout, "%s %5.2" FMT_printf_score_t,
 		cat[i].filename,
 		-nats2bits(cat[i].score));
       }
+      fputc(output_delimiter, stdout);
     }
     fprintf(stdout, "\n");
 
@@ -448,10 +453,11 @@ void score_categories() {
 	    fprintf(stdout, "# mean_complexity ");
 	    no_title = (bool_t)0;
 	  }
-	  fprintf(stdout, "%s %5.2" FMT_printf_score_t " ", 
+	  fprintf(stdout, "%s %5.2" FMT_printf_score_t,
 		  cat[i].filename, 
 		  (double)cat[i].model_full_token_count/cat[i].model_num_docs);
 	}
+      fputc(output_delimiter, stdout);
       }
       if( !no_title ) { fprintf(stdout, "\n"); }
     }
@@ -465,8 +471,8 @@ void score_categories() {
 	for(j = 0; j < TOKEN_CLASS_MAX; j++) {
 	  fprintf(stdout, "%4" FMT_printf_integer_t " ", cat[i].mediacounts[j]);
 	}
-	fprintf(stdout, " )* %-.1f ", 
-		cat[i].complexity);
+	fprintf(stdout, " )* %-.1f%c",
+		cat[i].complexity, output_delimiter);
       } else {
 	fprintf(stdout, "%s\tM ", cat[i].filename);
 	for(j = 0; j < TOKEN_CLASS_MAX; j++) {
@@ -492,13 +498,14 @@ void score_categories() {
 	  }
 	  fprintf(stdout, ")* %-6.1f ", cat[i].complexity);
 	  if( u_options & (1<<U_OPTION_CONFIDENCE) ) {
-	    fprintf(stdout, "@ %5.1f%% ", 
+	    fprintf(stdout, "@ %5.1f%%",
 		    (float)gamma_pvalue(&cat[i], cat[i].score_div)/10);
 	  } else {
 	    /* percentage of tokens which were recognized */
-	    fprintf(stdout, "H %.f%% ",
+	    fprintf(stdout, "H %.f%%",
 		    (100.0 * (1.0 - cat[i].fmiss/((score_t)cat[i].fcomplexity))));
 	  }
+        fputc(output_delimiter, stdout);
 	}
 	fprintf(stdout, "\n");
       } else {
@@ -4402,6 +4409,10 @@ int set_option(int op, char *optarg) {
     zthreshold = atoi(optarg);
     c++;
     break;
+  case 's':
+    output_delimiter = '\n';
+    c++;
+    break;
   default:
     c--;
     break;
@@ -4591,7 +4602,7 @@ int main(int argc, char **argv) {
 
   /* parse the options */
   while( (op = getopt(argc, argv, 
-		      "01Aac:Dde:f:FG:g:H:h:ijL:l:mMNno:O:Ppq:RrST:UVvw:x:XYz:@")) > -1 ) {
+		      "01Aac:Dde:f:FG:g:H:h:ijL:l:mMNno:O:Ppq:RrsST:UVvw:x:XYz:@")) > -1 ) {
     set_option(op, optarg);
   }
 
