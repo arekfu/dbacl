@@ -408,7 +408,8 @@ void score_categories() {
       }
       fputc(output_delimiter, stdout);
     }
-    fprintf(stdout, "\n");
+    if(output_delimiter != '\n')
+      fprintf(stdout, "\n");
 
   } else if( u_options & (1<<U_OPTION_SCORES) ) {
 
@@ -443,7 +444,8 @@ void score_categories() {
       }
       fputc(output_delimiter, stdout);
     }
-    fprintf(stdout, "\n");
+    if(output_delimiter != '\n')
+      fprintf(stdout, "\n");
 
     if( u_options & (1<<U_OPTION_APPEND) ) {
       no_title = (bool_t)1;
@@ -459,7 +461,7 @@ void score_categories() {
 	}
       fputc(output_delimiter, stdout);
       }
-      if( !no_title ) { fprintf(stdout, "\n"); }
+      if( !no_title && output_delimiter != '\n' ) { fprintf(stdout, "\n"); }
     }
 
   } else if(u_options & (1<<U_OPTION_MEDIACOUNTS) ) {
@@ -474,11 +476,12 @@ void score_categories() {
 	fprintf(stdout, " )* %-.1f%c",
 		cat[i].complexity, output_delimiter);
       } else {
-	fprintf(stdout, "%s\tM ", cat[i].filename);
+	fprintf(stdout, "%s\tM%c", cat[i].filename, output_delimiter);
 	for(j = 0; j < TOKEN_CLASS_MAX; j++) {
-	  fprintf(stdout, "%4" FMT_printf_integer_t " ", cat[i].mediacounts[j]);
+	  fprintf(stdout, "%4" FMT_printf_integer_t "%c", cat[i].mediacounts[j], output_delimiter);
 	}
-	fprintf(stdout, "\n");
+      if(output_delimiter != '\n')
+        fprintf(stdout, "\n");
       }
     }
   } else {
@@ -507,7 +510,8 @@ void score_categories() {
 	  }
         fputc(output_delimiter, stdout);
 	}
-	fprintf(stdout, "\n");
+      if(output_delimiter != '\n')
+        fprintf(stdout, "\n");
       } else {
 	if( u_options & (1<<U_OPTION_APPEND) ) {
 	  fprintf(stdout, "\n# category ");
